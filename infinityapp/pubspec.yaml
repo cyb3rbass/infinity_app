@@ -1,0 +1,36 @@
+name: flutter_projects
+description: "A new Flutter project."
+
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+   sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^0.13.6
+  image_picker: ^1.0.7
+  http_parser: ^4.0.2
+  iconsax: ^0.0.8
+  shimmer: ^2.0.0  # Add this line
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/google.png
+    - assets/images/
+    - assets/images/starting.jpg
+    - assets/images/gif3.gif
+    - assets/images/pythoncourse.jpg
+    - assets/images/profile.jpg
