@@ -129,6 +129,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: cs.surface,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
