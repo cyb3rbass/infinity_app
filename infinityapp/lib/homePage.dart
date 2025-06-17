@@ -6,7 +6,6 @@ import 'package:shimmer/shimmer.dart';
 import 'profile.dart';
 import 'settings.dart';
 
-
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -178,6 +177,55 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     ];
   }
 
+  BottomNavigationBar _buildBottomNavigationBar(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return BottomNavigationBar(
+      currentIndex: _currentBottomNavIndex,
+      onTap: (index) {
+        if (index == _currentBottomNavIndex) return;
+        setState(() => _currentBottomNavIndex = index);
+        switch (index) {
+          case 1:
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ProfilePage()),
+            );
+            break;
+          case 2:
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsPage()),
+            );
+            break;
+          case 3:
+          // TODO: Implement MyCoursesPage
+            break;
+        }
+      },
+      selectedItemColor: cs.primary,
+      unselectedItemColor: cs.onSurface.withOpacity(0.6),
+      selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
+      type: BottomNavigationBarType.fixed,
+      elevation: 8,
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.home_outlined),
+          label: 'الرئيسية',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.person_outline),
+          label: 'الملف الشخصي',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.settings_outlined),
+          label: 'الإعدادات',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.menu_book_outlined),
+          label: 'دوراتي',
+        ),
+      ],
+    );
+  }
+
   Widget _buildContent(ColorScheme cs, TextTheme tt) {
     return RefreshIndicator.adaptive(
       onRefresh: _fetchCourses,
@@ -197,52 +245,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           const SliverToBoxAdapter(child: SizedBox(height: _sectionPadding * 2)),
         ],
       ),
-    );
-  }
-
-  BottomNavigationBar _buildBottomNavigationBar(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return BottomNavigationBar(
-      currentIndex: _currentBottomNavIndex,
-      onTap: (index) {
-        setState(() => _currentBottomNavIndex = index);
-        switch (index) {
-          case 0:
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ProfilePage()),
-            );
-            break;
-          case 1:
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SettingsPage()),
-            );
-            break;
-        //  case 2:
-        //    Navigator.of(context).push(
-         //     MaterialPageRoute(builder: (_) => const MyCoursesPage()),
-          //  );
-            //break;
-        }
-      },
-      selectedItemColor: cs.primary,
-      unselectedItemColor: cs.onSurface.withOpacity(0.6),
-      selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
-      type: BottomNavigationBarType.fixed,
-      elevation: 8,
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline),
-          label: 'الملف الشخصي',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.settings_outlined),
-          label: 'الإعدادات',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.menu_book_outlined),
-          label: 'دوراتي',
-        ),
-      ],
     );
   }
 
@@ -574,7 +576,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       ),
     );
   }
-
   Widget _buildErrorState(ColorScheme cs, TextTheme tt) {
     return Center(
       child: Padding(
