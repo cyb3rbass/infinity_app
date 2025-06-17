@@ -12,9 +12,9 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController email = TextEditingController();
+  final TextEditingController phoneNumber = TextEditingController();
   final TextEditingController password = TextEditingController();
-  final FocusNode _emailFocus = FocusNode();
+  final FocusNode _phoneFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
 
   bool _isLoading = false;
@@ -68,9 +68,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
   @override
   void dispose() {
-    email.dispose();
+    phoneNumber.dispose();
     password.dispose();
-    _emailFocus.dispose();
+    _phoneFocus.dispose();
     _passwordFocus.dispose();
     _controller.dispose();
     super.dispose();
@@ -84,7 +84,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       final response = await http.post(
         Uri.parse("https://eclipsekw.com/InfinityCourses/login.php"),
         body: {
-          'email': email.text,
+          'phone_number': phoneNumber.text,
           'password': password.text,
           'action': 'login',
         },
@@ -93,7 +93,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       if (response.statusCode == 200) {
         Navigator.pushReplacementNamed(context, '/home');
       } else {
-        showErrorSnackbar('فشل تسجيل الدخول: البريد الإلكتروني أو كلمة المرور غير صحيحة');
+        showErrorSnackbar('فشل تسجيل الدخول: رقم الهاتف أو كلمة المرور غير صحيحة');
       }
     } catch (e) {
       showErrorSnackbar('حدث خطأ: ${e.toString()}');
@@ -182,8 +182,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                     ),
                     const SizedBox(height: 32),
                     // Glass Card with Form
-                    const SizedBox(height: 32),
-                    // Glass Card with Form
                     FadeTransition(
                       opacity: _formAnim,
                       child: glassCard(
@@ -210,15 +208,15 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                 ],
                               ),
                               const SizedBox(height: 24),
-                              // Email Field
+                              // Phone Number Field
                               TextFormField(
-                                controller: email,
-                                focusNode: _emailFocus,
-                                keyboardType: TextInputType.emailAddress,
+                                controller: phoneNumber,
+                                focusNode: _phoneFocus,
+                                keyboardType: TextInputType.phone,
                                 decoration: InputDecoration(
-                                  labelText: "البريد الإلكتروني",
+                                  labelText: "رقم الهاتف",
                                   prefixIcon: Icon(
-                                    Icons.email_outlined,
+                                    Icons.phone_outlined,
                                     color: cs.onSurface.withOpacity(0.6),
                                   ),
                                   filled: true,
@@ -230,9 +228,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                   labelStyle: const TextStyle(fontFamily: 'Tajawal'),
                                 ),
                                 validator: (v) {
-                                  if (v == null || v.isEmpty) return 'الرجاء إدخال البريد الإلكتروني';
-                                  if (!RegExp(r'^[\w\-\.]+@([\w\-]+\.)+[\w\-]{2,4}$').hasMatch(v)) {
-                                    return 'بريد إلكتروني غير صالح';
+                                  if (v == null || v.isEmpty) return 'الرجاء إدخال رقم الهاتف';
+                                  if (!RegExp(r'^\d{8,}$').hasMatch(v)) {
+                                    return 'رقم الهاتف غير صالح';
                                   }
                                   return null;
                                 },
