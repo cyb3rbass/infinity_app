@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'package:shimmer/shimmer.dart';
 import 'profile.dart';
 import 'settings.dart';
+import 'myCourses.dart';
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -196,7 +198,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             );
             break;
           case 3:
-          // TODO: Implement MyCoursesPage
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MyCoursesPage()),
+            );
             break;
         }
       },
