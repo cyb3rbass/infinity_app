@@ -189,17 +189,17 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         switch (index) {
           case 1:
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ProfilePage()),
+              MaterialPageRoute(builder: (_) => const MyCoursesPage()),
             );
             break;
           case 2:
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SettingsPage()),
+              MaterialPageRoute(builder: (_) => const ProfilePage()),
             );
             break;
           case 3:
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const MyCoursesPage()),
+              MaterialPageRoute(builder: (_) => const SettingsPage()),
             );
             break;
         }
@@ -214,6 +214,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           icon: Icon(Icons.home_outlined),
           label: 'الرئيسية',
         ),
+
+
+        BottomNavigationBarItem(
+          icon: Icon(Icons.menu_book_outlined),
+          label: 'دوراتي',
+        ),
         BottomNavigationBarItem(
           icon: Icon(Icons.person_outline),
           label: 'الملف الشخصي',
@@ -221,10 +227,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         BottomNavigationBarItem(
           icon: Icon(Icons.settings_outlined),
           label: 'الإعدادات',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.menu_book_outlined),
-          label: 'دوراتي',
         ),
       ],
     );
