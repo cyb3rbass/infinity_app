@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 import 'register.dart';
 
@@ -36,7 +38,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         duration: const Duration(milliseconds: 1200),
       )..forward();
       _initializeAnimations();
-      // Initialize abstract shapes
       for (int i = 0; i < 5; i++) {
         _shapes.add(AbstractShape(
           color: i.isEven ? primaryColor.withOpacity(0.06) : secondaryColor.withOpacity(0.06),
@@ -91,7 +92,27 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       );
 
       if (response.statusCode == 200) {
-        Navigator.pushReplacementNamed(context, '/home');
+        final responseData = json.decode(response.body);
+        if (responseData['status'] == 'success') {
+          // Save user data and token to SharedPreferences
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('user_id', responseData['user']['id'].toString());
+          await prefs.setString('full_name', responseData['user']['full_name'] ?? '');
+          await prefs.setString('profile_image', responseData['user']['profile_image'] ?? '');
+          await prefs.setString('university', responseData['user']['university'] ?? '');
+          await prefs.setString('major', responseData['user']['major'] ?? '');
+          await prefs.setString('gender', responseData['user']['gender'] ?? '');
+          await prefs.setString('phone_number', responseData['user']['phone_number'] ?? '');
+          await prefs.setString('email', responseData['user']['email'] ?? '');
+          await prefs.setString('created_at', responseData['user']['created_at'] ?? '');
+          await prefs.setString('role', responseData['user']['role'] ?? 'student');
+          await prefs.setString('token', responseData['user']['token'] ?? '');
+          await prefs.setInt('reg_courses', responseData['user']['reg_courses'] ?? 0);
+
+          Navigator.pushReplacementNamed(context, '/home');
+        } else {
+          showErrorSnackbar('فشل تسجيل الدخول: ${responseData['message']}');
+        }
       } else {
         showErrorSnackbar('فشل تسجيل الدخول: رقم الهاتف أو كلمة المرور غير صحيحة');
       }
@@ -174,14 +195,12 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     const SizedBox(height: 32),
-                    // Animated Avatar Placeholder
                     Image.asset(
                       'assets/images/7605750.jpg',
-                      width: 500,  // Adjust width as needed
+                      width: 500,
                       fit: BoxFit.contain,
                     ),
                     const SizedBox(height: 32),
-                    // Glass Card with Form
                     FadeTransition(
                       opacity: _formAnim,
                       child: glassCard(
@@ -208,7 +227,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                 ],
                               ),
                               const SizedBox(height: 24),
-                              // Phone Number Field
                               TextFormField(
                                 controller: phoneNumber,
                                 focusNode: _phoneFocus,
@@ -239,7 +257,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                 style: const TextStyle(fontFamily: 'Tajawal'),
                               ),
                               const SizedBox(height: 16),
-                              // Password Field
                               TextFormField(
                                 controller: password,
                                 focusNode: _passwordFocus,
@@ -261,7 +278,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                   fillColor: cs.surfaceVariant.withOpacity(0.1),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide.none,
+                                    borderSide: BorderSide(color: Colors.white.withOpacity(0.1), width: 1),
                                   ),
                                   labelStyle: const TextStyle(fontFamily: 'Tajawal'),
                                 ),
@@ -275,12 +292,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                 style: const TextStyle(fontFamily: 'Tajawal'),
                               ),
                               const SizedBox(height: 8),
-                              // Forgot Password
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: TextButton(
                                   onPressed: () {
-                                    // TODO: Implement forgot password flow
                                     showErrorSnackbar('سيتم تفعيل استعادة كلمة المرور قريبًا');
                                   },
                                   child: Text(
@@ -299,7 +314,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                       ),
                     ),
                     const SizedBox(height: 24),
-                    // Login Button
                     FadeTransition(
                       opacity: _buttonsAnim,
                       child: Container(
@@ -349,7 +363,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // Register Link
                     FadeTransition(
                       opacity: _buttonsAnim,
                       child: Row(
@@ -406,7 +419,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   }
 }
 
-// Abstract shape animation classes
 class AbstractShape {
   double x = Random().nextDouble();
   double y = Random().nextDouble();
