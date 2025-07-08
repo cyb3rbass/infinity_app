@@ -134,30 +134,33 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final tt = Theme.of(context).textTheme;
     final screenWidth = MediaQuery.of(context).size.width;
 
-    return Scaffold(
-      backgroundColor: cs.surface,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
+    return WillPopScope(
+      onWillPop: () async => false, // Disables swipe-back and back button
+      child: Scaffold(
         backgroundColor: cs.surface,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        title: _buildSearchField(cs, tt, screenWidth),
-        actions: _buildAppBarActions(cs),
-        titleSpacing: _sectionPadding,
-      ),
-      body: _showError
-          ? _buildErrorState(cs, tt, screenWidth)
-          : _isLoading
-          ? _buildLoadingState(cs, screenWidth)
-          : _buildContent(cs, tt, screenWidth),
-      bottomNavigationBar: _buildBottomNavigationBar(context, cs, tt, screenWidth),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _searchController.text = '',
-        backgroundColor: cs.primary,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        elevation: 4,
-        child: Icon(Icons.search_rounded, color: cs.onPrimary),
-        tooltip: 'بحث جديد',
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          backgroundColor: cs.surface,
+          elevation: 0,
+          surfaceTintColor: Colors.transparent,
+          title: _buildSearchField(cs, tt, screenWidth),
+          actions: _buildAppBarActions(cs),
+          titleSpacing: _sectionPadding,
+        ),
+        body: _showError
+            ? _buildErrorState(cs, tt, screenWidth)
+            : _isLoading
+            ? _buildLoadingState(cs, screenWidth)
+            : _buildContent(cs, tt, screenWidth),
+        bottomNavigationBar: _buildBottomNavigationBar(context, cs, tt, screenWidth),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => _searchController.text = '',
+          backgroundColor: cs.primary,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 4,
+          child: Icon(Icons.search_rounded, color: cs.onPrimary),
+          tooltip: 'بحث جديد',
+        ),
       ),
     );
   }
