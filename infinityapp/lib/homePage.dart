@@ -18,7 +18,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
-  int _selectedCategoryIndex = 0;
   bool _isLoading = true;
   bool _showError = false;
   List<Map<String, dynamic>> _allCourses = [];
@@ -30,17 +29,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   static const double _sectionPadding = 24.0;
   static const double _itemSpacing = 16.0;
   static const double _smallSpacing = 8.0;
-  static const double _chipSpacing = 12.0;
   static const double _courseCardWidth = 220.0;
 
-  final List<String> categories = [
-    'الكل',
-    'التصميم',
-    'البرمجة',
-    'التسويق',
-    'اللغات',
-    'التطوير الذاتي'
-  ];
+
 
   @override
   void initState() {
@@ -316,7 +307,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         slivers: [
           SliverToBoxAdapter(child: _buildBannerCarousel(cs, tt, screenWidth)),
-          SliverToBoxAdapter(child: _buildCategoryChips(cs, tt, screenWidth)),
           _buildCourseSection(
             title: 'مقترحة لك',
             courses: _allCourses,
@@ -338,58 +328,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildCategoryChips(ColorScheme cs, TextTheme tt, double screenWidth) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        _sectionPadding,
-        _itemSpacing,
-        _sectionPadding,
-        _itemSpacing,
-      ),
-      child: SizedBox(
-        height: screenWidth < 400 ? 36 : 42,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          reverse: true,
-          itemCount: categories.length,
-          separatorBuilder: (_, __) => const SizedBox(width: _chipSpacing),
-          itemBuilder: (context, index) {
-            final selected = index == _selectedCategoryIndex;
-            return ChoiceChip(
-              label: Text(
-                categories[index],
-                textDirection: TextDirection.rtl,
-                style: tt.labelLarge?.copyWith(
-                  fontFamily: 'Tajawal',
-                  color: selected ? cs.onPrimary : cs.onSurface,
-                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                  fontSize: screenWidth < 400 ? 12 : 14,
-                ),
-              ),
-              selected: selected,
-              onSelected: (_) => setState(() => _selectedCategoryIndex = index),
-              selectedColor: cs.primary,
-              backgroundColor: cs.surfaceVariant.withOpacity(0.1),
-              padding: EdgeInsets.symmetric(
-                horizontal: screenWidth < 400 ? _smallSpacing : _itemSpacing,
-                vertical: _smallSpacing,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                  color: selected ? Colors.transparent : cs.outline.withOpacity(0.2),
-                  width: 1,
-                ),
-              ),
-              elevation: selected ? 4 : 0,
-              shadowColor: cs.shadow.withOpacity(0.2),
-              showCheckmark: false,
-            );
-          },
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildBannerCarousel(ColorScheme cs, TextTheme tt, double screenWidth) {
     return SizedBox(
@@ -534,15 +473,26 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               textDirection: TextDirection.rtl,
               children: [
-                Text(
-                  title,
-                  style: tt.titleLarge?.copyWith(
-                    fontFamily: 'Tajawal',
-                    fontWeight: FontWeight.bold,
-                    fontSize: screenWidth < 400 ? 16 : 20,
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      title,
+                      textDirection: TextDirection.rtl,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: false,
+                      maxLines: 1,
+                      style: tt.titleLarge?.copyWith(
+                        fontFamily: 'Tajawal',
+                        fontWeight: FontWeight.bold,
+                        fontSize: screenWidth < 400 ? 16 : 20,
+                        height: 1,
+                      ),
+                    ),
                   ),
-                  textDirection: TextDirection.rtl,
                 ),
+
+
                 InkWell(
                   borderRadius: BorderRadius.circular(12),
                   onTap: () {
@@ -846,31 +796,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-            ),
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: _sectionPadding),
-            child: SizedBox(
-              height: screenWidth < 400 ? 36 : 42,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                reverse: true,
-                itemCount: categories.length,
-                separatorBuilder: (_, __) => const SizedBox(width: _chipSpacing),
-                itemBuilder: (context, index) => Shimmer.fromColors(
-                  baseColor: cs.surfaceVariant.withOpacity(0.3),
-                  highlightColor: cs.surfaceVariant.withOpacity(0.1),
-                  child: Container(
-                    width: screenWidth < 400 ? 70 : 80,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
                 ),
               ),
             ),
