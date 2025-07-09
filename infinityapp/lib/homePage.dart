@@ -6,7 +6,8 @@ import 'package:shimmer/shimmer.dart';
 import 'profile.dart';
 import 'settings.dart';
 import 'myCourses.dart';
-import 'course_overview.dart'; // Import CourseOverviewPage
+import 'course_overview.dart';
+import 'viewcourses.dart'; // Import ViewCoursesPage
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -79,25 +80,24 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           setState(() {
             _allCourses = List<Map<String, dynamic>>.from(data['courses']).map((course) {
               return {
-                'title': course['title']?.toString() ?? 'دورة',
-                'instructor': course['instructor']?.toString() ?? 'اسم المدرب',
-                'major': course['major']?.toString() ?? 'غير محدد',
+                'id': course['id'],
+                'title': course['title'] ?? 'دورة',
+                'description': course['description'] ?? '',
+                'university': course['university'],
+                'major': course['major'] ?? 'غير محدد',
+                'thumbnail': course['thumbnail'] ?? '',
+                'published_by': course['published_by'],
+                'published_at': course['published_at'],
                 'price': course['price']?.toString() ?? 'غير متوفر',
-                'intro_video': course['intro_video']?.toString() ?? 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-                'image': course['image']?.toString() ?? '',
-                'rating': course['rating']?.toString() ?? '4.5',
-                'comments': course['comments']?.toString() ?? '120',
-                'topics': (course['topics'] as List<dynamic>?)?.cast<String>() ?? ['مقدمة', 'الجزء الأول', 'الجزء الثاني'],
-                'videos': (course['videos'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [
-                  {'title': 'فيديو 1', 'url': 'https://www.youtube.com/watch?v=VIDEO_ID_1'},
-                  {'title': 'فيديو 2', 'url': 'https://www.youtube.com/watch?v=VIDEO_ID_2'},
-                ],
-                'files': (course['files'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [
-                  {'name': 'ملف PDF 1', 'url': 'https://example.com/file1.pdf'},
-                  {'name': 'ملف PDF 2', 'url': 'https://example.com/file2.pdf'},
-                ],
+                'teacher_id': course['teacher_id'],
+                'semester': course['semester'],
+                'status': course['status'],
+                'new_price': course['new_price'],
+                'prev_price': course['prev_price'],
+                'ratings': course['ratings']?.toString() ?? '4.5',
               };
             }).toList();
+
             _isLoading = false;
             _refreshAnimationController
               ..stop()
@@ -135,7 +135,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final screenWidth = MediaQuery.of(context).size.width;
 
     return WillPopScope(
-      onWillPop: () async => false, // Disables swipe-back and back button
+      onWillPop: () async => false,
       child: Scaffold(
         backgroundColor: cs.surface,
         appBar: AppBar(
@@ -350,7 +350,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         height: screenWidth < 400 ? 36 : 42,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
-          reverse: true, // RTL support
+          reverse: true,
           itemCount: categories.length,
           separatorBuilder: (_, __) => const SizedBox(width: _chipSpacing),
           itemBuilder: (context, index) {
@@ -545,7 +545,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 ),
                 InkWell(
                   borderRadius: BorderRadius.circular(12),
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => ViewCoursesPage(
+
+                          courses: courses,
+                        ),
+                      ),
+                    );
+                  },
                   child: Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Row(
@@ -612,7 +621,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(12),
                                 child: Image.network(
-                                  'https://eclipsekw.com/InfinityCourses/${course['image']}',
+                                  'https://eclipsekw.com/InfinityCourses/${course['thumbnail']}',
                                   height: screenWidth < 400 ? 70 : 80,
                                   width: double.infinity,
                                   fit: BoxFit.cover,
