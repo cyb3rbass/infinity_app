@@ -8,6 +8,8 @@ import 'settings.dart';
 import 'myCourses.dart';
 import 'course_overview.dart';
 import 'viewcourses.dart'; // Import ViewCoursesPage
+import 'package:shared_preferences/shared_preferences.dart';
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -31,11 +33,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   static const double _smallSpacing = 8.0;
   static const double _courseCardWidth = 220.0;
 
+  String? fullName;
+  String? userId;
+  String? token;
+  String? major;
+
 
 
   @override
+  @override
   void initState() {
     super.initState();
+
     _bannerAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
@@ -44,15 +53,41 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       parent: _bannerAnimationController,
       curve: Curves.easeInOutCubic,
     );
+
     _refreshAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     );
+
+    _checkSession(); // 🔐 Check session before loading user data
     _fetchCourses();
+
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _bannerAnimationController.forward();
     });
   }
+  Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      fullName = prefs.getString('full_name');
+      userId = prefs.getString('user_id');
+      token = prefs.getString('token');
+      major = prefs.getString('major');
+    });
+  }
+
+  Future<void> _checkSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isLoggedIn = prefs.getString('user_id') != null;
+    if (!isLoggedIn) {
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      }
+    } else {
+      _loadUserData(); // 👈 Load user data if logged in
+    }
+  }
+
 
   Future<void> _fetchCourses() async {
     setState(() {
@@ -309,7 +344,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           SliverToBoxAdapter(child: _buildBannerCarousel(cs, tt, screenWidth)),
           _buildCourseSection(
             title: 'مقترحة لك',
-            courses: _allCourses,
+            courses: major == null
+                ? _allCourses
+                : _allCourses.where((course) => course['major'] == major).toList(),
             screenWidth: screenWidth,
           ),
           _buildCourseSection(
@@ -327,8 +364,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       ),
     );
   }
-
-
 
   Widget _buildBannerCarousel(ColorScheme cs, TextTheme tt, double screenWidth) {
     return SizedBox(
@@ -491,15 +526,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
-
-
                 InkWell(
                   borderRadius: BorderRadius.circular(12),
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (context) => ViewCoursesPage(
-
                           courses: courses,
                         ),
                       ),
@@ -572,13 +604,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                 borderRadius: BorderRadius.circular(12),
                                 child: Image.network(
                                   'https://eclipsekw.com/InfinityCourses/${course['thumbnail']}',
-                                  height: screenWidth < 400 ? 70 : 80,
+                                  height: screenWidth < 400 ? 100 : 120,
                                   width: double.infinity,
                                   fit: BoxFit.cover,
                                   loadingBuilder: (context, child, loadingProgress) {
                                     if (loadingProgress == null) return child;
                                     return Container(
-                                      height: screenWidth < 400 ? 70 : 80,
+                                      height: screenWidth < 400 ? 100 : 120,
                                       width: double.infinity,
                                       color: cs.surfaceVariant.withOpacity(0.2),
                                       child: Center(
@@ -594,7 +626,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                     );
                                   },
                                   errorBuilder: (context, error, stackTrace) => Container(
-                                    height: screenWidth < 400 ? 70 : 80,
+                                    height: screenWidth < 400 ? 100 : 120,
                                     width: double.infinity,
                                     color: cs.surfaceVariant,
                                     child: Center(
@@ -607,66 +639,23 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 16),
                               Flexible(
                                 child: Text(
                                   course['title'] ?? '',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
+                                  softWrap: true, // Allows text to wrap if needed
+                                  maxLines: 3, // Keeps up to 3 lines but allows full text
+                                  overflow: TextOverflow.visible, // Prevents truncation
                                   textDirection: TextDirection.rtl,
                                   style: tt.bodyLarge?.copyWith(
                                     fontFamily: 'Tajawal',
                                     fontWeight: FontWeight.bold,
-                                    fontSize: screenWidth < 400 ? 13 : 15,
+                                    fontSize: screenWidth < 400 ? 12 : 14, // Slightly reduced for better fit
                                   ),
+                                  textScaleFactor: screenWidth < 400 ? 0.9 : 1.0, // Scales text down on smaller screens
                                 ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                course['major'] ?? '',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textDirection: TextDirection.rtl,
-                                style: tt.bodySmall?.copyWith(
-                                  fontFamily: 'Tajawal',
-                                  color: cs.onSurface.withOpacity(0.6),
-                                  fontSize: screenWidth < 400 ? 11 : 12,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                textDirection: TextDirection.rtl,
-                                children: [
-                                  Text(
-                                    course['rating'] ?? '4.5',
-                                    style: tt.bodySmall?.copyWith(
-                                      fontFamily: 'Tajawal',
-                                      fontSize: screenWidth < 400 ? 11 : 12,
-                                    ),
-                                    textDirection: TextDirection.rtl,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Icon(
-                                    Icons.star_rounded,
-                                    size: screenWidth < 400 ? 14 : 16,
-                                    color: Colors.amber,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    course['comments'] != null
-                                        ? '(${course['comments']})'
-                                        : '(120)',
-                                    style: tt.bodySmall?.copyWith(
-                                      fontFamily: 'Tajawal',
-                                      color: cs.onSurface.withOpacity(0.4),
-                                      fontSize: screenWidth < 400 ? 11 : 12,
-                                    ),
-                                    textDirection: TextDirection.rtl,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
+                              const Spacer(),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 textDirection: TextDirection.rtl,
