@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
+import 'package:shimmer/shimmer.dart';
 
 class MyCoursesPage extends StatefulWidget {
   const MyCoursesPage({super.key});
@@ -12,57 +13,71 @@ class MyCoursesPage extends StatefulWidget {
   State<MyCoursesPage> createState() => _MyCoursesPageState();
 }
 
-class _MyCoursesPageState extends State<MyCoursesPage> with SingleTickerProviderStateMixin {
+class _MyCoursesPageState extends State<MyCoursesPage>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
-  late final Animation<double> _scaleAnimation;
+  late final Animation<Offset> _slideAnimation;
 
   static const double _sectionPadding = 24.0;
   static const double _itemSpacing = 16.0;
-  static const double _courseCardWidth = 160.0;
+  static const double _courseCardHeight = 120.0;
 
-  List<Map<String, dynamic>> userCourses = [];
+  List<Map<String, dynamic>> _userCourses = [];
   bool _isLoading = true;
-  String? errorMessage;
+  bool _hasError = false;
+  String? _errorMessage;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
+    _initAnimations();
+    _fetchUserCourses();
+    _setupAutoRefresh();
+  }
+
+  void _initAnimations() {
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
     );
+
     _fadeAnimation = CurvedAnimation(
       parent: _animationController,
       curve: Curves.easeInOut,
     );
-    _scaleAnimation = Tween<double>(begin: 0.95, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
-    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOutQuart,
+    ));
+
     SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _animationController.forward();
-        _fetchUserCourses();
-      }
+      if (mounted) _animationController.forward();
     });
   }
 
-  // Fetch user courses from API
+  void _setupAutoRefresh() {
+    _refreshTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      if (mounted) _fetchUserCourses();
+    });
+  }
+
   Future<void> _fetchUserCourses() async {
     try {
+      setState(() => _isLoading = true);
+
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getString('user_id');
       final token = prefs.getString('token');
-      final regCourses = prefs.getInt('reg_courses'); // Changed from getString to getInt
+      final regCourses = prefs.getInt('reg_courses');
 
-      if (userId == null || token == null || regCourses == null) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            errorMessage = 'لم يتم العثور على دورات مسجلة';
-          });
-        }
-        return;
+      if (userId == null || token == null) {
+        throw Exception('User not authenticated');
       }
 
       final response = await http.post(
@@ -70,70 +85,46 @@ class _MyCoursesPageState extends State<MyCoursesPage> with SingleTickerProvider
         body: {
           'user_id': userId,
           'token': token,
-          'course_id': regCourses.toString(), // Convert int to String for API
+          'course_id': regCourses?.toString() ?? '',
         },
-      ).timeout(const Duration(seconds: 30), onTimeout: () {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            errorMessage = 'انتهت مهلة الطلب';
-          });
-        }
-        throw TimeoutException('Request timed out');
-      });
+      ).timeout(const Duration(seconds: 30));
 
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
-        if (responseData['status'] == 'success') {
-          if (mounted) {
-            setState(() {
-              userCourses = List<Map<String, dynamic>>.from(responseData['courses']);
-              _isLoading = false;
-            });
-          }
-        } else {
-          if (mounted) {
-            setState(() {
-              _isLoading = false;
-              errorMessage = responseData['message'] ?? 'فشل تحميل الدورات';
-            });
-          }
-        }
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200 && data['status'] == 'success') {
+        setState(() {
+          _userCourses = List<Map<String, dynamic>>.from(data['courses']);
+          _isLoading = false;
+          _hasError = false;
+        });
       } else {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            errorMessage = 'خطأ في الاتصال بالخادم';
-          });
-        }
+        throw Exception(data['message'] ?? 'Failed to load courses');
       }
     } catch (e) {
-      if (mounted) {
+      final message = e.toString();
+
+      if (message.contains('Missing required fields')) {
+        // Backend is saying “you have no courses” → show empty state
+        setState(() {
+          _userCourses = [];
+          _isLoading = false;
+          _hasError = false; // clear the error flag
+        });
+      } else {
+        // Any other real error → show your error state
         setState(() {
           _isLoading = false;
-          errorMessage = 'خطأ: $e';
+          _hasError = true;
+          _errorMessage = message.replaceFirst('Exception: ', '');
         });
       }
     }
   }
 
-  // Show snackbar for messages
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: const TextStyle(fontFamily: 'Tajawal')),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  @override
+    @override
   void dispose() {
-    _animationController.stop();
     _animationController.dispose();
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
@@ -144,186 +135,190 @@ class _MyCoursesPageState extends State<MyCoursesPage> with SingleTickerProvider
     final screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
-      backgroundColor: cs.surface,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: cs.onSurface),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        backgroundColor: cs.surface,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        title: Text(
-          'دوراتي',
-          style: tt.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Tajawal',
-            fontSize: screenWidth < 400 ? 18 : 22,
+      body: SafeArea(
+        child: _isLoading && _userCourses.isEmpty
+            ? _buildShimmerLoader()
+            : SlideTransition(
+          position: _slideAnimation,
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // Header
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    _sectionPadding,
+                    _sectionPadding,
+                    _sectionPadding,
+                    _itemSpacing,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      textDirection: TextDirection.rtl,
+                      children: [
+                        Text(
+                          'دوراتي',
+                          style: tt.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Tajawal',
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.refresh_rounded),
+                          onPressed: _fetchUserCourses,
+                          tooltip: 'تحديث',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Content
+                if (_hasError)
+                  SliverFillRemaining(
+                    child: _buildErrorState(),
+                  )
+                else if (_userCourses.isEmpty)
+                  SliverFillRemaining(
+                    child: _buildEmptyState(),
+                  )
+                else
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: screenWidth < 600
+                          ? _sectionPadding
+                          : _sectionPadding * 2,
+                    ),
+                    sliver: SliverList.separated(
+                      itemCount: _userCourses.length,
+                      separatorBuilder: (_, __) =>
+                      const SizedBox(height: _itemSpacing),
+                      itemBuilder: (_, i) =>
+                          _buildCourseCard(_userCourses[i]),
+                    ),
+                  ),
+              ],
+            ),
           ),
-          textDirection: TextDirection.rtl,
-        ),
-        centerTitle: true,
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : FadeTransition(
-        opacity: _fadeAnimation,
-        child: ScaleTransition(
-          scale: _scaleAnimation,
-          child: _buildCoursesList(context),
         ),
       ),
     );
   }
 
-  Widget _buildCoursesList(BuildContext context) {
-    if (userCourses.isEmpty) {
-      return _buildEmptyState(context);
-    }
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: MediaQuery.of(context).size.width < 600 ? _sectionPadding : _sectionPadding * 1.5),
-      child: ListView.separated(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.only(top: _itemSpacing, bottom: _sectionPadding * 2),
-        itemCount: userCourses.length,
-        separatorBuilder: (_, __) => const SizedBox(height: _itemSpacing),
-        itemBuilder: (context, index) => _buildCourseCard(context, userCourses[index]),
-      ),
-    );
-  }
-
-  Widget _buildCourseCard(BuildContext context, Map<String, dynamic> course) {
+  Widget _buildCourseCard(Map<String, dynamic> course) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    // Simulate progress and status for now, as database doesn't provide them
-    final progress = course['status'] == 'ongoing' ? 0.65 : course['status'] == 'completed' ? 1.0 : 0.0;
-    final completedDate = course['status'] == 'completed' ? '2025-07-01' : null;
+    final progress = _calculateProgress(course['status']);
+    final statusText = _getStatusText(course['status']);
 
     return Card(
-      elevation: 2,
+      elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: cs.outline.withOpacity(0.1), width: 1),
+        side: BorderSide(
+          color: cs.outline.withOpacity(0.1),
+          width: 1,
+        ),
       ),
-      shadowColor: cs.shadow.withOpacity(0.2),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
           // TODO: Navigate to course details
         },
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             textDirection: TextDirection.rtl,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Course Image
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.network(
                   'https://eclipsekw.com/InfinityCourses/${course['thumbnail']}',
-                  width: screenWidth < 400 ? _courseCardWidth * 0.8 : _courseCardWidth,
-                  height: screenWidth < 400 ? 80 : 100,
+                  width: _courseCardHeight * 0.8,
+                  height: _courseCardHeight * 0.8,
                   fit: BoxFit.cover,
-                  loadingBuilder: (ctx, child, progress) {
-                    if (progress == null) return child;
-                    return Container(
-                      width: screenWidth < 400 ? _courseCardWidth * 0.8 : _courseCardWidth,
-                      height: screenWidth < 400 ? 80 : 100,
-                      color: cs.surfaceVariant.withOpacity(0.2),
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          value: progress.expectedTotalBytes != null
-                              ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                              : null,
-                          strokeWidth: 2,
-                          color: cs.primary,
-                        ),
-                      ),
-                    );
-                  },
                   errorBuilder: (_, __, ___) => Container(
-                    width: screenWidth < 400 ? _courseCardWidth * 0.8 : _courseCardWidth,
-                    height: screenWidth < 400 ? 80 : 100,
+                    width: _courseCardHeight * 0.8,
+                    height: _courseCardHeight * 0.8,
                     color: cs.surfaceVariant,
-                    child: Center(child: Icon(Icons.broken_image_rounded, color: cs.onSurfaceVariant)),
+                    child: Icon(
+                      Icons.image_not_supported_rounded,
+                      color: cs.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 16),
+
+              // Course Details
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   textDirection: TextDirection.rtl,
                   children: [
                     Text(
                       course['major'] ?? 'غير محدد',
-                      style: tt.bodySmall?.copyWith(
+                      style: tt.labelSmall?.copyWith(
                         color: cs.primary,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Tajawal',
-                        fontSize: screenWidth < 400 ? 12 : 14,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      course['title'] ?? 'غير متوفر',
+                      course['title'] ?? 'بدون عنوان',
+                      style: tt.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: tt.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Tajawal',
-                        fontSize: screenWidth < 400 ? 14 : 16,
-                      ),
-                      textDirection: TextDirection.rtl,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'مدة: ${course['duration'] ?? 'غير متوفر'}',
-                      style: tt.bodySmall?.copyWith(
-                        color: cs.onSurface.withOpacity(0.6),
-                        fontFamily: 'Tajawal',
-                        fontSize: screenWidth < 400 ? 12 : 13,
-                      ),
-                      textDirection: TextDirection.rtl,
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text(
-                          '${course['ratings']?.toString() ?? 'غير متوفر'}',
-                          style: tt.bodySmall?.copyWith(
-                            fontFamily: 'Tajawal',
-                            fontSize: screenWidth < 400 ? 12 : 13,
+
+                    // Progress Bar
+                    if (progress < 1.0 && progress > 0.0)
+                      Column(
+                        children: [
+                          LinearProgressIndicator(
+                            value: progress,
+                            backgroundColor: cs.surfaceVariant,
+                            color: cs.primary,
+                            minHeight: 6,
+                            borderRadius: BorderRadius.circular(3),
                           ),
-                          textDirection: TextDirection.rtl,
+                          const SizedBox(height: 8),
+                          Row(
+                            textDirection: TextDirection.rtl,
+                            children: [
+                              Text(
+                                '${(progress * 100).toStringAsFixed(0)}%',
+                                style: tt.labelSmall?.copyWith(
+                                  color: cs.primary,
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                statusText,
+                                style: tt.labelSmall?.copyWith(
+                                  color: cs.onSurface.withOpacity(0.6),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      )
+                    else if (progress == 1.0)
+                      Text(
+                        statusText,
+                        style: tt.labelSmall?.copyWith(
+                          color: Colors.green,
                         ),
-                        const SizedBox(width: 4),
-                        Icon(Icons.star_rounded, size: screenWidth < 400 ? 14 : 16, color: cs.primary),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (course['status'] == 'ongoing')
-                      _buildProgressIndicator(context, progress, screenWidth),
-                    if (course['status'] == 'completed')
-                      _buildCompletedBadge(context, completedDate, screenWidth),
-                    if (course['status'] == 'saved')
-                      _buildPriceTag(context, course['price']?.toString() ?? '0.00', screenWidth),
+                      ),
                   ],
                 ),
               ),
-              IconButton(
-                icon: Icon(
-                  course['status'] == 'saved' ? Icons.favorite_rounded : Icons.more_vert_rounded,
-                  color: course['status'] == 'saved' ? cs.error : cs.onSurface.withOpacity(0.6),
-                  size: screenWidth < 400 ? 20 : 24,
-                ),
-                onPressed: () {
-                  // TODO: Handle saved/un-saved or show menu
-                },
-              ),
             ],
           ),
         ),
@@ -331,146 +326,158 @@ class _MyCoursesPageState extends State<MyCoursesPage> with SingleTickerProvider
     );
   }
 
-  Widget _buildProgressIndicator(BuildContext context, double progress, double screenWidth) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Text(
-          '${(progress * 100).toStringAsFixed(0)}% مكتمل',
-          style: tt.bodySmall?.copyWith(
-            color: cs.onSurface.withOpacity(0.8),
-            fontFamily: 'Tajawal',
-            fontSize: screenWidth < 400 ? 11 : 12,
-          ),
-          textDirection: TextDirection.rtl,
-        ),
-        const SizedBox(height: 6),
-        LinearProgressIndicator(
-          value: progress,
-          backgroundColor: cs.surfaceVariant.withOpacity(0.3),
-          color: cs.primary,
-          minHeight: 6,
-          borderRadius: BorderRadius.circular(3),
-        ),
-      ],
-    );
+  double _calculateProgress(String? status) {
+    switch (status) {
+      case 'ongoing':
+        return 0.65;
+      case 'completed':
+        return 1.0;
+      default:
+        return 0.0;
+    }
   }
 
-  Widget _buildCompletedBadge(BuildContext context, String? date, double screenWidth) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        Text(
-          'تم الانتهاء في ${date ?? 'غير متوفر'}',
-          style: tt.bodySmall?.copyWith(
-            color: cs.onSurface.withOpacity(0.6),
-            fontFamily: 'Tajawal',
-            fontSize: screenWidth < 400 ? 11 : 12,
-          ),
-          textDirection: TextDirection.rtl,
-        ),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: cs.primary.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'مكتمل',
-                style: tt.bodySmall?.copyWith(
-                  color: cs.primary,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Tajawal',
-                  fontSize: screenWidth < 400 ? 11 : 12,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Icon(Icons.check_circle_rounded, size: screenWidth < 400 ? 14 : 16, color: cs.primary),
-            ],
-          ),
-        ),
-      ],
-    );
+  String _getStatusText(String? status) {
+    switch (status) {
+      case 'ongoing':
+        return 'قيد التقدم';
+      case 'completed':
+        return 'مكتمل - ${DateTime.now().toString().substring(0, 10)}';
+      default:
+        return 'لم يبدأ بعد';
+    }
   }
 
-  Widget _buildPriceTag(BuildContext context, String price, double screenWidth) {
+  Widget _buildEmptyState() {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    return Text(
-      '$price د.ك',
-      style: tt.titleMedium?.copyWith(
-        color: cs.primary,
-        fontWeight: FontWeight.bold,
-        fontFamily: 'Tajawal',
-        fontSize: screenWidth < 400 ? 14 : 16,
-      ),
-      textDirection: TextDirection.rtl,
-    );
-  }
-
-  Widget _buildEmptyState(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final screenWidth = MediaQuery.of(context).size.width;
 
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(_sectionPadding),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          textDirection: TextDirection.rtl,
           children: [
             Icon(
               Icons.play_circle_outline_rounded,
-              size: screenWidth < 400 ? 56 : 64,
-              color: cs.onSurface.withOpacity(0.3),
+              size: 72,
+              color: cs.onSurface.withOpacity(0.2),
             ),
-            const SizedBox(height: _itemSpacing),
+            const SizedBox(height: 24),
             Text(
-              errorMessage ?? 'لا توجد دورات مسجلة',
+              'لا توجد دورات مسجلة',
               style: tt.titleMedium?.copyWith(
-                color: cs.onSurface.withOpacity(0.6),
-                fontFamily: 'Tajawal',
-                fontSize: screenWidth < 400 ? 16 : 18,
+                fontWeight: FontWeight.bold,
               ),
-              textDirection: TextDirection.rtl,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
-              'ابدأ دورة جديدة اليوم!',
+              'يمكنك تصفح الدورات المتاحة وتسجيل في ما يعجبك',
               style: tt.bodyMedium?.copyWith(
-                color: cs.onSurface.withOpacity(0.4),
-                fontFamily: 'Tajawal',
-                fontSize: screenWidth < 400 ? 14 : 16,
+                color: cs.onSurface.withOpacity(0.6),
               ),
-              textDirection: TextDirection.rtl,
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: _itemSpacing),
+            const SizedBox(height: 24),
             FilledButton(
               onPressed: () {
-                // TODO: Navigate to browse courses
+                // TODO: Navigate to courses page
               },
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 2,
-                shadowColor: cs.shadow.withOpacity(0.3),
+              child: const Text('تصفح الدورات'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(_sectionPadding),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          textDirection: TextDirection.rtl,
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              size: 72,
+              color: cs.error.withOpacity(0.2),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'حدث خطأ',
+              style: tt.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
               ),
-              child: Text(
-                'تصفح الدورات',
-                style: tt.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Tajawal',
-                  fontSize: screenWidth < 400 ? 14 : 16,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _errorMessage ?? 'تعذر تحميل الدورات',
+              style: tt.bodyMedium?.copyWith(
+                color: cs.onSurface.withOpacity(0.6),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: _fetchUserCourses,
+              child: const Text('إعادة المحاولة'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShimmerLoader() {
+    final cs = Theme.of(context).colorScheme;
+
+    return Shimmer.fromColors(
+      baseColor: cs.surfaceVariant.withOpacity(0.3),
+      highlightColor: cs.surfaceVariant.withOpacity(0.1),
+      child: Padding(
+        padding: const EdgeInsets.all(_sectionPadding),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              textDirection: TextDirection.rtl,
+              children: [
+                Container(
+                  width: 100,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                textDirection: TextDirection.rtl,
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Expanded(
+              child: ListView.separated(
+                itemCount: 3,
+                separatorBuilder: (_, __) => const SizedBox(height: _itemSpacing),
+                itemBuilder: (_, __) => Container(
+                  height: _courseCardHeight,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
               ),
             ),
           ],

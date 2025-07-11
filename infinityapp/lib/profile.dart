@@ -6,9 +6,12 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
+import 'settings.dart';
+
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  final VoidCallback onBack;                    // ← add this
+  const ProfilePage({super.key, required this.onBack});
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -665,10 +668,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: cs.onSurface),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        automaticallyImplyLeading: false,
         backgroundColor: cs.surface,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
@@ -678,10 +678,13 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
             fontWeight: FontWeight.bold,
             fontFamily: 'Tajawal',
             fontSize: screenWidth < 400 ? 18 : 22,
+            color: cs.onSurface,
           ),
+          textDirection: TextDirection.rtl,
         ),
         centerTitle: true,
       ),
+
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : FadeTransition(
@@ -736,12 +739,16 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                       onTap: _changePassword,
                     ),
                     const Divider(height: 1),
-                    _buildActionItem(
-                      label: 'اللغة',
-                      icon: Icons.language_rounded,
-                      value: 'العربية',
-                      onTap: () {},
-                    ),
+              _buildActionItem(
+                label: 'الإعدادات',
+                icon: Icons.settings,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SettingsPage()),
+                  );
+                },
+              ),
                     const Divider(height: 1),
                     _buildActionItem(
                       label: 'الإشعارات',

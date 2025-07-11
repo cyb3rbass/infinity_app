@@ -4,13 +4,11 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shimmer/shimmer.dart';
 import 'profile.dart';
-import 'settings.dart';
 import 'myCourses.dart';
 import 'course_overview.dart';
-import 'viewcourses.dart'; // Import ViewCoursesPage
+import 'viewcourses.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-
+import 'search.dart';
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -38,9 +36,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   String? token;
   String? major;
 
-
-
-  @override
   @override
   void initState() {
     super.initState();
@@ -59,13 +54,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 1500),
     );
 
-    _checkSession(); // 🔐 Check session before loading user data
+    _checkSession();
     _fetchCourses();
 
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _bannerAnimationController.forward();
     });
   }
+
   Future<void> _loadUserData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -84,10 +80,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       }
     } else {
-      _loadUserData(); // 👈 Load user data if logged in
+      _loadUserData();
     }
   }
-
 
   Future<void> _fetchCourses() async {
     setState(() {
@@ -164,29 +159,105 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       onWillPop: () async => false,
       child: Scaffold(
         backgroundColor: cs.surface,
-        appBar: AppBar(
+        appBar: _currentBottomNavIndex == 0
+            ? AppBar(
           automaticallyImplyLeading: false,
           backgroundColor: cs.surface,
           elevation: 0,
           surfaceTintColor: Colors.transparent,
-          title: _buildSearchField(cs, tt, screenWidth),
+          title: Text(
+            'مرحباً، ${fullName ?? 'مستخدم'}!',
+            style: tt.titleLarge?.copyWith(
+              fontFamily: 'Tajawal',
+              fontWeight: FontWeight.bold,
+              fontSize: screenWidth < 400 ? 16 : 20,
+              color: cs.onSurface,
+            ),
+            textDirection: TextDirection.rtl,
+          ),
           actions: _buildAppBarActions(cs),
           titleSpacing: _sectionPadding,
+        )
+            : null,
+
+        body: IndexedStack(
+          index: _currentBottomNavIndex,
+          children: [
+            // Home tab content (unchanged)
+            _showError
+                ? _buildErrorState(cs, tt, screenWidth)
+                : _isLoading
+                ? _buildLoadingState(cs, screenWidth)
+                : _buildContent(cs, tt, screenWidth),
+
+            // Search tab
+            const SearchPage(),
+
+            // My Courses tab
+            const MyCoursesPage(),
+
+            // Profile tab with onBack callback
+            ProfilePage(
+              onBack: () {
+                setState(() {
+                  _currentBottomNavIndex = 0;  // switch back to the Home tab
+                });
+              },
+            ),
+          ],
         ),
-        body: _showError
-            ? _buildErrorState(cs, tt, screenWidth)
-            : _isLoading
-            ? _buildLoadingState(cs, screenWidth)
-            : _buildContent(cs, tt, screenWidth),
-        bottomNavigationBar: _buildBottomNavigationBar(context, cs, tt, screenWidth),
-        floatingActionButton: FloatingActionButton(
+
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: _currentBottomNavIndex,
+          onTap: (index) {
+            setState(() {
+              _currentBottomNavIndex = index;
+            });
+          },
+          selectedItemColor: cs.primary,
+          unselectedItemColor: cs.onSurface.withOpacity(0.6),
+          selectedLabelStyle: tt.labelMedium?.copyWith(
+            fontFamily: 'Tajawal',
+            fontWeight: FontWeight.bold,
+            fontSize: screenWidth < 400 ? 12 : 14,
+          ),
+          unselectedLabelStyle: tt.labelMedium?.copyWith(
+            fontFamily: 'Tajawal',
+            fontSize: screenWidth < 400 ? 12 : 14,
+          ),
+          type: BottomNavigationBarType.fixed,
+          elevation: 12,
+          backgroundColor: cs.surface,
+          items: [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined, size: screenWidth < 400 ? 22 : 26),
+              label: 'الرئيسية',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.search_rounded, size: screenWidth < 400 ? 22 : 26),
+              label: 'البحث',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.menu_book_outlined, size: screenWidth < 400 ? 22 : 26),
+              label: 'دوراتي',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline, size: screenWidth < 400 ? 22 : 26),
+              label: 'الملف الشخصي',
+            ),
+          ],
+        ),
+
+        floatingActionButton: _currentBottomNavIndex == 0
+            ? FloatingActionButton(
           onPressed: () => _searchController.text = '',
           backgroundColor: cs.primary,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 4,
           child: Icon(Icons.search_rounded, color: cs.onPrimary),
           tooltip: 'بحث جديد',
-        ),
+        )
+            : null,
       ),
     );
   }
@@ -259,77 +330,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     ];
   }
 
-  Widget _buildBottomNavigationBar(
-      BuildContext context, ColorScheme cs, TextTheme tt, double screenWidth) {
-    return BottomNavigationBar(
-      currentIndex: _currentBottomNavIndex,
-      onTap: (index) {
-        if (index == _currentBottomNavIndex) return;
-        setState(() => _currentBottomNavIndex = index);
-        Widget page;
-        String heroTag;
-        switch (index) {
-          case 1:
-            page = const MyCoursesPage();
-            heroTag = 'my_courses';
-            break;
-          case 2:
-            page = const ProfilePage();
-            heroTag = 'profile';
-            break;
-          case 3:
-            page = const SettingsPage();
-            heroTag = 'settings';
-            break;
-          default:
-            return;
-        }
-        Navigator.of(context).push(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => Hero(
-              tag: heroTag,
-              child: page,
-            ),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-          ),
-        );
-      },
-      selectedItemColor: cs.primary,
-      unselectedItemColor: cs.onSurface.withOpacity(0.6),
-      selectedLabelStyle: tt.labelMedium?.copyWith(
-        fontFamily: 'Tajawal',
-        fontWeight: FontWeight.bold,
-        fontSize: screenWidth < 400 ? 12 : 14,
-      ),
-      unselectedLabelStyle: tt.labelMedium?.copyWith(
-        fontFamily: 'Tajawal',
-        fontSize: screenWidth < 400 ? 12 : 14,
-      ),
-      type: BottomNavigationBarType.fixed,
-      elevation: 12,
-      backgroundColor: cs.surface,
-      items: [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home_outlined, size: screenWidth < 400 ? 22 : 26),
-          label: 'الرئيسية',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.menu_book_outlined, size: screenWidth < 400 ? 22 : 26),
-          label: 'دوراتي',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline, size: screenWidth < 400 ? 22 : 26),
-          label: 'الملف الشخصي',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.settings_outlined, size: screenWidth < 400 ? 22 : 26),
-          label: 'الإعدادات',
-        ),
-      ],
-    );
-  }
 
   Widget _buildContent(ColorScheme cs, TextTheme tt, double screenWidth) {
     return RefreshIndicator.adaptive(
@@ -643,16 +643,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               Flexible(
                                 child: Text(
                                   course['title'] ?? '',
-                                  softWrap: true, // Allows text to wrap if needed
-                                  maxLines: 3, // Keeps up to 3 lines but allows full text
-                                  overflow: TextOverflow.visible, // Prevents truncation
+                                  softWrap: true,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.visible,
                                   textDirection: TextDirection.rtl,
                                   style: tt.bodyLarge?.copyWith(
                                     fontFamily: 'Tajawal',
                                     fontWeight: FontWeight.bold,
-                                    fontSize: screenWidth < 400 ? 12 : 14, // Slightly reduced for better fit
+                                    fontSize: screenWidth < 400 ? 12 : 14,
                                   ),
-                                  textScaleFactor: screenWidth < 400 ? 0.9 : 1.0, // Scales text down on smaller screens
+                                  textScaleFactor: screenWidth < 400 ? 0.9 : 1.0,
                                 ),
                               ),
                               const Spacer(),
