@@ -188,10 +188,10 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                         newPasswordController.text,
                       );
                       if (isMounted) {
-                        setState(() => isLoading = false);
+                        Navigator.pop(context);
                       }
-                      Navigator.pop(context);
                     }
+
                   },
                   style: _buttonStyle(context),
                   child: isLoading
@@ -316,10 +316,10 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                       setState(() => isLoading = true);
                       await _updateProfileField('full_name', nameController.text);
                       if (isMounted) {
-                        setState(() => isLoading = false);
+                        Navigator.pop(context);
                       }
-                      Navigator.pop(context);
                     }
+
                   },
                   style: _buttonStyle(context),
                   child: isLoading
@@ -387,10 +387,10 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                       setState(() => isLoading = true);
                       await _updateProfileField('email', emailController.text);
                       if (isMounted) {
-                        setState(() => isLoading = false);
+                        Navigator.pop(context);
                       }
-                      Navigator.pop(context);
                     }
+
                   },
                   style: _buttonStyle(context),
                   child: isLoading
@@ -459,10 +459,10 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                       setState(() => isLoading = true);
                       await _updateProfileField('phone_number', phoneController.text);
                       if (isMounted) {
-                        setState(() => isLoading = false);
+                        Navigator.pop(context);
                       }
-                      Navigator.pop(context);
                     }
+
                   },
                   style: _buttonStyle(context),
                   child: isLoading

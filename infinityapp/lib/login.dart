@@ -163,22 +163,16 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.white,
       appBar: AppBar(
+        automaticallyImplyLeading: false, // <<--- THIS REMOVES THE BACK ARROW
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: primaryColor),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: Text(
           'تسجيل الدخول',
-          style: theme.textTheme.headlineSmall?.copyWith(
-            color: Colors.grey.shade800,
-            fontWeight: FontWeight.w700,
-            fontFamily: 'Tajawal',
-          ),
+          // ...
         ),
         centerTitle: true,
       ),
+
       body: Stack(
         children: [
           Container(color: Colors.white),
@@ -296,7 +290,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                 alignment: Alignment.centerRight,
                                 child: TextButton(
                                   onPressed: () {
-                                    showErrorSnackbar('سيتم تفعيل استعادة كلمة المرور قريبًا');
+                                    Navigator.pushNamed(context, '/forgot');
                                   },
                                   child: Text(
                                     'نسيت كلمة المرور؟',
@@ -308,6 +302,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                   ),
                                 ),
                               ),
+
                             ],
                           ),
                         ),

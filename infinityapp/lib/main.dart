@@ -5,6 +5,8 @@ import 'startingPage.dart';
 import 'login.dart';
 import 'register.dart';
 import 'homePage.dart';
+import 'forgetPassword.dart';
+
 
 void main() {
   runApp(const MyApp());
@@ -48,6 +50,8 @@ class MyApp extends StatelessWidget {
             '/login': (_) => const LoginPage(),
             '/register': (_) => const RegistrationPage(),
             '/home': (_) => const HomePage(),
+            '/forgot': (_) => const ForgotPasswordPage(),
+
           },
           debugShowCheckedModeBanner: false,
         );
