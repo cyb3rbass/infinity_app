@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:vimeo_player_flutter/vimeo_player_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class VideoPage extends StatefulWidget {
   final String videoUrl;
@@ -71,23 +72,44 @@ class _VideoPageState extends State<VideoPage> {
   Future<void> _fetchRelatedVideos() async {
     setState(() => _isLoading = true);
     try {
-      // Replace with your actual API URL
-      final response = await http.get(
-        Uri.parse('https://eclipsekw.com/InfinityCourses/get_related_videos.php=${widget.courseId}'),
+      // Retrieve user_id and token from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+      final token = prefs.getString('token');
+
+      if (userId == null || token == null) {
+        throw Exception('User not authenticated');
+      }
+
+      print('Fetching related videos for course_id: ${widget.courseId}, user_id: $userId, token: $token');
+
+      // Use POST request to match API requirements
+      final response = await http.post(
+        Uri.parse('https://eclipsekw.com/InfinityCourses/get_related_videos.php'),
+        body: {
+          'user_id': userId,
+          'token': token,
+          'course_id': widget.courseId.toString(),
+          'main_video_url': widget.videoUrl,
+        },
       );
+
+      print('Related Videos API Status: ${response.statusCode}');
+      print('Related Videos API Body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['status'] == 'success' && data['videos'] != null) {
           setState(() {
             relatedVideos = List<Map<String, String>>.from(
               data['videos'].map((video) => {
-                'id': video['id'].toString(),
+                'id': video['id']?.toString() ?? '',
                 'title': video['title'] ?? 'فيديو بدون عنوان',
                 'description': video['description'] ?? 'لا يوجد وصف',
-                'url': video['url'] ?? '',
+                'url': video['video_url'] ?? '', // Match API response field
               }),
             );
-            // Filter out the current video from related videos to avoid duplication
+            // Filter out the current video to avoid duplication
             relatedVideos.removeWhere((video) => video['url'] == widget.videoUrl);
           });
           print('Fetched related videos: $relatedVideos');
@@ -229,7 +251,6 @@ class _VideoPageState extends State<VideoPage> {
                   height: 200,
                   child: VimeoPlayer(
                     videoId: _currentVideoId!,
-                    // Removed autoPlay parameter as it's not supported
                   ),
                 ),
               ),
