@@ -73,7 +73,7 @@ class _VideoPageState extends State<VideoPage> {
     try {
       // Replace with your actual API URL
       final response = await http.get(
-        Uri.parse('https://your-api-url/get_videos_by_course.php?course_id=${widget.courseId}'),
+        Uri.parse('https://eclipsekw.com/InfinityCourses/get_related_videos.php=${widget.courseId}'),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
