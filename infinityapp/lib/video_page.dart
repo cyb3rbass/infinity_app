@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:chewie/chewie.dart';
-import 'package:video_player/video_player.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:webview_flutter/webview_flutter.dart';
 
 class VideoPage extends StatefulWidget {
   final int courseId;
@@ -27,8 +26,7 @@ class _VideoPageState extends State<VideoPage> {
   bool _isLoading = true;
   bool _hasError = false;
   String? _errorMessage;
-  ChewieController? _chewieController;
-  VideoPlayerController? _videoPlayerController;
+  WebViewController? _webViewController;
 
   @override
   void initState() {
@@ -69,7 +67,7 @@ class _VideoPageState extends State<VideoPage> {
           _isLoading = false;
         });
         if (_videos.isNotEmpty && _videos[0].containsKey('url')) {
-          _initializePlayer(_videos[0]['url']);
+          _initializeWebView(_videos[0]['url']);
         } else {
           throw Exception('No valid video URL found');
         }
@@ -85,45 +83,41 @@ class _VideoPageState extends State<VideoPage> {
     }
   }
 
-  void _initializePlayer(String url) {
-    print('Initializing Vimeo video with URL: $url');
-    _chewieController?.dispose();
-    _videoPlayerController?.dispose();
+  void _initializeWebView(String url) {
+    print('Initializing WebView with URL: $url');
 
-    _videoPlayerController = VideoPlayerController.network(
-      url,
-      httpHeaders: {
-        // Uncomment if Vimeo requires an access token
-        // 'Authorization': 'Bearer YOUR_VIMEO_ACCESS_TOKEN',
-      },
-      formatHint: url.endsWith('.m3u8') ? VideoFormat.hls : null, // Support HLS
-    )..initialize().then((_) {
-      setState(() {
-        _chewieController = ChewieController(
-          videoPlayerController: _videoPlayerController!,
-          autoPlay: true,
-          looping: false,
-          aspectRatio: _videoPlayerController!.value.aspectRatio != 0
-              ? _videoPlayerController!.value.aspectRatio
-              : 16 / 9,
-          errorBuilder: (context, errorMessage) {
-            return Center(
-              child: Text(
-                'Playback error: $errorMessage',
-                style: TextStyle(color: Colors.red),
-              ),
-            );
+    // Convert Vimeo webpage URL to embed URL if necessary
+    String embedUrl = url;
+    if (url.contains('vimeo.com/')) {
+      final videoId = url.split('vimeo.com/')[1].split('?')[0];
+      embedUrl = 'https://player.vimeo.com/video/$videoId';
+    }
+
+    _webViewController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0x00000000))
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (String url) {
+            setState(() {
+              _isLoading = true;
+            });
           },
-        );
-        print('Video player initialized successfully');
-      });
-    }).catchError((error) {
-      setState(() {
-        _hasError = true;
-        _errorMessage = 'Failed to initialize video: $error';
-        print('Initialization error: $error');
-      });
-    });
+          onPageFinished: (String url) {
+            setState(() {
+              _isLoading = false;
+            });
+          },
+          onWebResourceError: (WebResourceError error) {
+            setState(() {
+              _hasError = true;
+              _errorMessage = 'Failed to load video: ${error.description}';
+              print('WebView error: ${error.description}');
+            });
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(embedUrl));
   }
 
   void _onVideoSelect(int index) {
@@ -131,7 +125,7 @@ class _VideoPageState extends State<VideoPage> {
       _selectedIndex = index;
     });
     if (_videos[index].containsKey('url')) {
-      _initializePlayer(_videos[index]['url']);
+      _initializeWebView(_videos[index]['url']);
     } else {
       setState(() {
         _hasError = true;
@@ -142,8 +136,7 @@ class _VideoPageState extends State<VideoPage> {
 
   @override
   void dispose() {
-    _chewieController?.dispose();
-    _videoPlayerController?.dispose();
+    _webViewController = null;
     super.dispose();
   }
 
@@ -159,19 +152,16 @@ class _VideoPageState extends State<VideoPage> {
         elevation: 1,
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
           : _hasError
           ? Center(child: Text(_errorMessage ?? 'Error loading videos'))
           : Column(
         children: [
           AspectRatio(
             aspectRatio: 16 / 9,
-            child: _hasError
-                ? Center(child: Text(_errorMessage ?? 'Error loading video'))
-                : _chewieController != null &&
-                _chewieController!.videoPlayerController.value.isInitialized
-                ? Chewie(controller: _chewieController!)
-                : Center(child: CircularProgressIndicator()),
+            child: _webViewController != null
+                ? WebViewWidget(controller: _webViewController!)
+                : const Center(child: CircularProgressIndicator()),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16),
@@ -192,7 +182,7 @@ class _VideoPageState extends State<VideoPage> {
           Expanded(
             child: ListView.separated(
               itemCount: _videos.length,
-              separatorBuilder: (_, __) => Divider(height: 1),
+              separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (_, i) {
                 final video = _videos[i];
                 final isSelected = i == _selectedIndex;
