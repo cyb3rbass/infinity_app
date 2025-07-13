@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -117,56 +116,9 @@ class _MyCoursesPageState extends State<MyCoursesPage>
         _isLoading = false;
         _hasError = true;
         _errorMessage = e.toString().contains('Invalid user or token')
-            ? 'خطأ في تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى.'
+            ? 'خطأ في تسجيل الدخول. يرجى تسج يل الدخول مرة أخرى.'
             : e.toString().replaceFirst('Exception: ', '');
       });
-    }
-  }
-
-  Future<List<Map<String, String>>> _fetchRelatedVideos(String courseId, String? mainVideoUrl) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('user_id');
-      final token = prefs.getString('token');
-
-      if (userId == null || token == null) {
-        throw Exception('User not authenticated');
-      }
-
-      print('Fetching related videos for course_id: $courseId, main_video_url: $mainVideoUrl');
-
-      final response = await http.post(
-        Uri.parse('https://eclipsekw.com/InfinityCourses/get_related_videos.php'),
-        body: {
-          'user_id': userId,
-          'token': token,
-          'course_id': courseId,
-          if (mainVideoUrl != null) 'main_video_url': mainVideoUrl,
-        },
-      ).timeout(const Duration(seconds: 30));
-
-      print('Related Videos API Status: ${response.statusCode}');
-      print('Related Videos API Body: ${response.body}');
-
-      if (response.body.isEmpty) {
-        throw Exception('Empty response from related videos API');
-      }
-
-      final data = json.decode(response.body);
-
-      if (response.statusCode == 200 && data['status'] == 'success') {
-        print('Related videos received: ${data['videos']}');
-        return List<Map<String, String>>.from(data['videos'].map((v) => {
-          'title': v['title'] ?? 'Untitled Video',
-          'description': v['description'] ?? 'No description',
-          'url': v['video_url'] ?? '',
-        }));
-      } else {
-        throw Exception(data['message'] ?? 'Failed to load related videos');
-      }
-    } catch (e) {
-      print('Error fetching related videos: $e');
-      return [];
     }
   }
 
@@ -283,21 +235,6 @@ class _MyCoursesPageState extends State<MyCoursesPage>
 
           print('Navigating to VideoPage with course_id: ${course['id']}');
 
-          final relatedVideos = await _fetchRelatedVideos(
-            course['id'].toString(),
-            course['video_url'],
-          );
-
-          if (relatedVideos.isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('لا توجد فيديوهات ذات صلة متاحة لهذه الدورة',
-                    textDirection: TextDirection.rtl),
-                backgroundColor: cs.error,
-              ),
-            );
-          }
-
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -305,7 +242,7 @@ class _MyCoursesPageState extends State<MyCoursesPage>
                 videoUrl: course['video_url'],
                 courseName: course['title'] ?? 'بدون عنوان',
                 teacherName: course['teacher'] ?? 'غير محدد',
-                relatedVideos: relatedVideos,
+                courseId: int.parse(course['id'].toString()),
               ),
             ),
           );

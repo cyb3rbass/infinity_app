@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:vimeo_player_flutter/vimeo_player_flutter.dart';
-import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class VideoPage extends StatefulWidget {
   final String videoUrl;
   final String courseName;
   final String teacherName;
-  final List<Map<String, String>> relatedVideos;
+  final int courseId;
 
   const VideoPage({
     super.key,
     required this.videoUrl,
     required this.courseName,
     required this.teacherName,
-    required this.relatedVideos,
+    required this.courseId,
   });
 
   @override
@@ -23,11 +24,14 @@ class VideoPage extends StatefulWidget {
 class _VideoPageState extends State<VideoPage> {
   String? _currentVideoId;
   bool _hasError = false;
+  bool _isLoading = false;
+  List<Map<String, String>> relatedVideos = [];
 
   @override
   void initState() {
     super.initState();
     _initializePlayer(widget.videoUrl);
+    _fetchRelatedVideos();
   }
 
   void _initializePlayer(String url) {
@@ -44,13 +48,90 @@ class _VideoPageState extends State<VideoPage> {
     } catch (e) {
       setState(() => _hasError = true);
       print('Video initialization error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'خطأ في تحميل الفيديو: $e',
+            textDirection: TextDirection.rtl,
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
     }
   }
 
   String? _extractVimeoId(String url) {
-    final regex = RegExp(r'vimeo\.com/(\d+)');
+    // Match Vimeo ID from URLs like vimeo.com/123456789 or player.vimeo.com/video/123456789
+    final regex = RegExp(r'(?:vimeo\.com\/|player\.vimeo\.com\/video\/)(\d+)');
     final match = regex.firstMatch(url);
     return match?.group(1);
+  }
+
+  Future<void> _fetchRelatedVideos() async {
+    setState(() => _isLoading = true);
+    try {
+      // Replace with your actual API URL
+      final response = await http.get(
+        Uri.parse('https://your-api-url/get_videos_by_course.php?course_id=${widget.courseId}'),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == 'success' && data['videos'] != null) {
+          setState(() {
+            relatedVideos = List<Map<String, String>>.from(
+              data['videos'].map((video) => {
+                'id': video['id'].toString(),
+                'title': video['title'] ?? 'فيديو بدون عنوان',
+                'description': video['description'] ?? 'لا يوجد وصف',
+                'url': video['url'] ?? '',
+              }),
+            );
+            // Filter out the current video from related videos to avoid duplication
+            relatedVideos.removeWhere((video) => video['url'] == widget.videoUrl);
+          });
+          print('Fetched related videos: $relatedVideos');
+        } else {
+          print('API error: ${data['message'] ?? 'Unknown error'}');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'خطأ في جلب الفيديوهات: ${data['message'] ?? 'خطأ غير معروف'}',
+                textDirection: TextDirection.rtl,
+                style: const TextStyle(fontFamily: 'Tajawal'),
+              ),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      } else {
+        print('HTTP error: ${response.statusCode}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'خطأ في الاتصال بالخادم: ${response.statusCode}',
+              textDirection: TextDirection.rtl,
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error fetching related videos: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'تعذر جلب الفيديوهات ذات الصلة: $e',
+            textDirection: TextDirection.rtl,
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   void _playNewVideo(String url) {
@@ -60,11 +141,22 @@ class _VideoPageState extends State<VideoPage> {
           content: Text(
             'رابط الفيديو غير صالح',
             textDirection: TextDirection.rtl,
-            style: TextStyle(
-              fontFamily: 'Tajawal',
-            ),
+            style: const TextStyle(fontFamily: 'Tajawal'),
           ),
           backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+      return;
+    }
+    if (url == widget.videoUrl) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'هذا الفيديو قيد التشغيل بالفعل',
+            textDirection: TextDirection.rtl,
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+          backgroundColor: Theme.of(context).colorScheme.primary,
         ),
       );
       return;
@@ -137,7 +229,7 @@ class _VideoPageState extends State<VideoPage> {
                   height: 200,
                   child: VimeoPlayer(
                     videoId: _currentVideoId!,
-                    // Note: Ensure Vimeo video settings are configured for desired playback behavior (e.g., autoplay)
+                    // Removed autoPlay parameter as it's not supported
                   ),
                 ),
               ),
@@ -170,7 +262,7 @@ class _VideoPageState extends State<VideoPage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 16),
                     Text(
                       'الوصف:',
                       style: tt.titleMedium?.copyWith(
@@ -179,32 +271,14 @@ class _VideoPageState extends State<VideoPage> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    widget.relatedVideos.isEmpty
-                        ? Text(
-                      'لا يوجد وصف',
+                    Text(
+                      relatedVideos.isNotEmpty
+                          ? relatedVideos.first['description'] ?? 'لا يوجد وصف'
+                          : 'لا يوجد وصف',
                       style: tt.bodyMedium?.copyWith(
                         color: cs.onSurfaceVariant,
                         fontFamily: 'Tajawal',
                       ),
-                    )
-                        : ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: widget.relatedVideos.length,
-                      itemBuilder: (context, index) {
-                        final video = widget.relatedVideos[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Text(
-                            video['description'] ?? 'لا يوجد وصف',
-                            style: tt.bodyMedium?.copyWith(
-                              color: cs.onSurfaceVariant,
-                              fontFamily: 'Tajawal',
-                            ),
-                            textDirection: TextDirection.rtl,
-                          ),
-                        );
-                      },
                     ),
                     const Divider(height: 32, thickness: 1),
                     // Related Videos Section
@@ -216,7 +290,9 @@ class _VideoPageState extends State<VideoPage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    widget.relatedVideos.isEmpty
+                    _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : relatedVideos.isEmpty
                         ? Padding(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       child: Text(
@@ -231,9 +307,9 @@ class _VideoPageState extends State<VideoPage> {
                         : ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      itemCount: widget.relatedVideos.length,
+                      itemCount: relatedVideos.length,
                       itemBuilder: (context, index) {
-                        final video = widget.relatedVideos[index];
+                        final video = relatedVideos[index];
                         return Card(
                           elevation: 2,
                           shape: RoundedRectangleBorder(
