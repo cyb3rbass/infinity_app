@@ -1,193 +1,114 @@
 import 'package:flutter/material.dart';
-import 'package:vimeo_player_flutter/vimeo_player_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:chewie/chewie.dart';
+import 'package:video_player/video_player.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class VideoPage extends StatefulWidget {
-  final String videoUrl;
-  final String courseName;
-  final String teacherName;
   final int courseId;
+  final String courseName;
+  final String? teacherName;
 
   const VideoPage({
-    super.key,
-    required this.videoUrl,
-    required this.courseName,
-    required this.teacherName,
+    Key? key,
     required this.courseId,
-  });
+    required this.courseName,
+    this.teacherName,
+  }) : super(key: key);
 
   @override
   State<VideoPage> createState() => _VideoPageState();
 }
 
 class _VideoPageState extends State<VideoPage> {
-  String? _currentVideoId;
+  List<Map<String, dynamic>> _videos = [];
+  int _selectedIndex = 0;
+  bool _isLoading = true;
   bool _hasError = false;
-  bool _isLoading = false;
-  List<Map<String, String>> relatedVideos = [];
+  String? _errorMessage;
+  ChewieController? _chewieController;
+  VideoPlayerController? _videoPlayerController;
 
   @override
   void initState() {
     super.initState();
-    _initializePlayer(widget.videoUrl);
-    _fetchRelatedVideos();
+    _fetchCourseVideos();
   }
 
-  void _initializePlayer(String url) {
+  Future<void> _fetchCourseVideos() async {
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+    });
+
     try {
-      print('Initializing video: $url');
-      final videoId = _extractVimeoId(url);
-      if (videoId == null) {
-        throw Exception('Invalid Vimeo URL');
-      }
-      setState(() {
-        _currentVideoId = videoId;
-        _hasError = false;
-      });
-    } catch (e) {
-      setState(() => _hasError = true);
-      print('Video initialization error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'خطأ في تحميل الفيديو: $e',
-            textDirection: TextDirection.rtl,
-            style: const TextStyle(fontFamily: 'Tajawal'),
-          ),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
-    }
-  }
-
-  String? _extractVimeoId(String url) {
-    // Match Vimeo ID from URLs like vimeo.com/123456789 or player.vimeo.com/video/123456789
-    final regex = RegExp(r'(?:vimeo\.com\/|player\.vimeo\.com\/video\/)(\d+)');
-    final match = regex.firstMatch(url);
-    return match?.group(1);
-  }
-
-  Future<void> _fetchRelatedVideos() async {
-    setState(() => _isLoading = true);
-    try {
-      // Retrieve user_id and token from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getString('user_id');
       final token = prefs.getString('token');
 
       if (userId == null || token == null) {
-        throw Exception('User not authenticated');
+        throw Exception('User authentication missing!');
       }
 
-      print('Fetching related videos for course_id: ${widget.courseId}, user_id: $userId, token: $token');
-
-      // Use POST request to match API requirements
       final response = await http.post(
         Uri.parse('https://eclipsekw.com/InfinityCourses/get_related_videos.php'),
         body: {
           'user_id': userId,
           'token': token,
           'course_id': widget.courseId.toString(),
-          'main_video_url': widget.videoUrl,
         },
       );
 
-      print('Related Videos API Status: ${response.statusCode}');
-      print('Related Videos API Body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['status'] == 'success' && data['videos'] != null) {
-          setState(() {
-            relatedVideos = List<Map<String, String>>.from(
-              data['videos'].map((video) => {
-                'id': video['id']?.toString() ?? '',
-                'title': video['title'] ?? 'فيديو بدون عنوان',
-                'description': video['description'] ?? 'لا يوجد وصف',
-                'url': video['video_url'] ?? '', // Match API response field
-              }),
-            );
-            // Filter out the current video to avoid duplication
-            relatedVideos.removeWhere((video) => video['url'] == widget.videoUrl);
-          });
-          print('Fetched related videos: $relatedVideos');
-        } else {
-          print('API error: ${data['message'] ?? 'Unknown error'}');
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'خطأ في جلب الفيديوهات: ${data['message'] ?? 'خطأ غير معروف'}',
-                textDirection: TextDirection.rtl,
-                style: const TextStyle(fontFamily: 'Tajawal'),
-              ),
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-          );
+      final data = json.decode(response.body);
+      if (response.statusCode == 200 && data['status'] == 'success') {
+        setState(() {
+          _videos = List<Map<String, dynamic>>.from(data['videos']);
+          _isLoading = false;
+        });
+        if (_videos.isNotEmpty) {
+          _initializePlayer(_videos[0]['url']);
         }
       } else {
-        print('HTTP error: ${response.statusCode}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'خطأ في الاتصال بالخادم: ${response.statusCode}',
-              textDirection: TextDirection.rtl,
-              style: const TextStyle(fontFamily: 'Tajawal'),
-            ),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
+        throw Exception(data['message'] ?? 'Failed to load videos');
       }
     } catch (e) {
-      print('Error fetching related videos: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'تعذر جلب الفيديوهات ذات الصلة: $e',
-            textDirection: TextDirection.rtl,
-            style: const TextStyle(fontFamily: 'Tajawal'),
-          ),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
-    } finally {
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+        _errorMessage = e.toString();
+      });
     }
   }
 
-  void _playNewVideo(String url) {
-    if (url.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'رابط الفيديو غير صالح',
-            textDirection: TextDirection.rtl,
-            style: const TextStyle(fontFamily: 'Tajawal'),
-          ),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
-      return;
-    }
-    if (url == widget.videoUrl) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'هذا الفيديو قيد التشغيل بالفعل',
-            textDirection: TextDirection.rtl,
-            style: const TextStyle(fontFamily: 'Tajawal'),
-          ),
-          backgroundColor: Theme.of(context).colorScheme.primary,
-        ),
-      );
-      return;
-    }
-    _initializePlayer(url);
+  void _initializePlayer(String url) {
+    _chewieController?.dispose();
+    _videoPlayerController?.dispose();
+
+    _videoPlayerController = VideoPlayerController.network(url)
+      ..initialize().then((_) {
+        setState(() {
+          _chewieController = ChewieController(
+            videoPlayerController: _videoPlayerController!,
+            autoPlay: true,
+            looping: false,
+            aspectRatio: _videoPlayerController!.value.aspectRatio,
+          );
+        });
+      });
+  }
+
+  void _onVideoSelect(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+    _initializePlayer(_videos[index]['url']);
   }
 
   @override
   void dispose() {
+    _chewieController?.dispose();
+    _videoPlayerController?.dispose();
     super.dispose();
   }
 
@@ -197,185 +118,71 @@ class _VideoPageState extends State<VideoPage> {
     final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: cs.background,
       appBar: AppBar(
-        title: Text(
-          widget.courseName,
-          style: tt.titleLarge?.copyWith(
-            fontFamily: 'Tajawal',
-            fontWeight: FontWeight.bold,
-          ),
-          textDirection: TextDirection.rtl,
-        ),
-        backgroundColor: cs.primary,
-        foregroundColor: cs.onPrimary,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: Text(widget.courseName, style: tt.titleMedium),
+        backgroundColor: cs.surface,
+        elevation: 1,
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            textDirection: TextDirection.rtl,
-            children: [
-              // Video Player Section
-              Container(
-                color: Colors.black,
-                child: _hasError || _currentVideoId == null
-                    ? Container(
-                  height: 200,
-                  alignment: Alignment.center,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        color: cs.error,
-                        size: 48,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'تعذر تحميل الفيديو',
-                        style: tt.bodyLarge?.copyWith(
-                          color: cs.error,
-                          fontFamily: 'Tajawal',
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-                    : SizedBox(
-                  height: 200,
-                  child: VimeoPlayer(
-                    videoId: _currentVideoId!,
-                  ),
-                ),
-              ),
-              // Course Details Section
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  textDirection: TextDirection.rtl,
-                  children: [
-                    Text(
-                      widget.courseName,
-                      style: tt.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Tajawal',
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      textDirection: TextDirection.rtl,
-                      children: [
-                        Icon(Icons.person, color: cs.primary, size: 20),
-                        const SizedBox(width: 4),
-                        Text(
-                          'المدرّس: ${widget.teacherName}',
-                          style: tt.bodyMedium?.copyWith(
-                            color: cs.onSurfaceVariant,
-                            fontFamily: 'Tajawal',
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'الوصف:',
-                      style: tt.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Tajawal',
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      relatedVideos.isNotEmpty
-                          ? relatedVideos.first['description'] ?? 'لا يوجد وصف'
-                          : 'لا يوجد وصف',
-                      style: tt.bodyMedium?.copyWith(
-                        color: cs.onSurfaceVariant,
-                        fontFamily: 'Tajawal',
-                      ),
-                    ),
-                    const Divider(height: 32, thickness: 1),
-                    // Related Videos Section
-                    Text(
-                      'فيديوهات ذات صلة',
-                      style: tt.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Tajawal',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : relatedVideos.isEmpty
-                        ? Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Text(
-                        'لا توجد فيديوهات ذات صلة',
-                        style: tt.bodyMedium?.copyWith(
-                          color: cs.onSurfaceVariant,
-                          fontFamily: 'Tajawal',
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    )
-                        : ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: relatedVideos.length,
-                      itemBuilder: (context, index) {
-                        final video = relatedVideos[index];
-                        return Card(
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          margin: const EdgeInsets.only(bottom: 12),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 8,
-                              horizontal: 16,
-                            ),
-                            leading: CircleAvatar(
-                              backgroundColor: cs.primaryContainer,
-                              child: Icon(
-                                Icons.play_arrow,
-                                color: cs.onPrimaryContainer,
-                              ),
-                            ),
-                            title: Text(
-                              video['title'] ?? 'فيديو بدون عنوان',
-                              style: tt.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Tajawal',
-                              ),
-                              textDirection: TextDirection.rtl,
-                            ),
-                            subtitle: Text(
-                              video['description'] ?? 'لا يوجد وصف',
-                              style: tt.bodyMedium?.copyWith(
-                                color: cs.onSurfaceVariant,
-                                fontFamily: 'Tajawal',
-                              ),
-                              textDirection: TextDirection.rtl,
-                            ),
-                            onTap: () => _playNewVideo(video['url']!),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : _hasError
+          ? Center(child: Text(_errorMessage ?? 'خطأ في تحميل الفيديوهات'))
+          : Column(
+        children: [
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: _chewieController != null &&
+                _chewieController!.videoPlayerController.value.isInitialized
+                ? Chewie(controller: _chewieController!)
+                : Center(child: CircularProgressIndicator()),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  widget.teacherName ?? '',
+                  style: tt.labelMedium?.copyWith(color: cs.primary),
+                ),
+                Text(
+                  'جميع الفيديوهات',
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.separated(
+              itemCount: _videos.length,
+              separatorBuilder: (_, __) => Divider(height: 1),
+              itemBuilder: (_, i) {
+                final video = _videos[i];
+                final isSelected = i == _selectedIndex;
+                return ListTile(
+                  leading: Icon(
+                    isSelected ? Icons.play_circle_fill : Icons.play_circle_outline,
+                    color: isSelected ? cs.primary : cs.onSurfaceVariant,
+                  ),
+                  title: Text(
+                    video['title'] ?? 'بدون عنوان',
+                    style: tt.titleMedium?.copyWith(
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                  subtitle: Text(
+                    video['description'] ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  selected: isSelected,
+                  onTap: () => _onVideoSelect(i),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
