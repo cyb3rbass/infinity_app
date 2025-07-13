@@ -239,7 +239,6 @@ class _MyCoursesPageState extends State<MyCoursesPage>
             context,
             MaterialPageRoute(
               builder: (context) => VideoPage(
-                videoUrl: course['video_url'],
                 courseName: course['title'] ?? 'بدون عنوان',
                 teacherName: course['teacher'] ?? 'غير محدد',
                 courseId: int.parse(course['id'].toString()),
