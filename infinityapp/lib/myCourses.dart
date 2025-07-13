@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
 import 'package:shimmer/shimmer.dart';
+import 'video_page.dart';
 
 class MyCoursesPage extends StatefulWidget {
   const MyCoursesPage({super.key});
@@ -76,24 +78,33 @@ class _MyCoursesPageState extends State<MyCoursesPage>
       final token = prefs.getString('token');
       final regCourses = prefs.getInt('reg_courses');
 
-      if (userId == null || token == null) {
-        throw Exception('User not authenticated');
+      if (userId == null || token == null || regCourses == null) {
+        throw Exception('User not authenticated or no registered courses');
       }
+
+      print('SharedPreferences - user_id: $userId, token: $token, reg_courses: $regCourses');
 
       final response = await http.post(
         Uri.parse('https://eclipsekw.com/InfinityCourses/get_user_courses.php'),
         body: {
           'user_id': userId,
           'token': token,
-          'course_id': regCourses?.toString() ?? '',
+          'course_id': regCourses.toString(),
         },
       ).timeout(const Duration(seconds: 30));
+
+      print('Courses API Status: ${response.statusCode}');
+      print('Courses API Body: ${response.body}');
+
+      if (response.body.isEmpty) {
+        throw Exception('Empty response from server');
+      }
 
       final data = json.decode(response.body);
 
       if (response.statusCode == 200 && data['status'] == 'success') {
         setState(() {
-          _userCourses = List<Map<String, dynamic>>.from(data['courses']);
+          _userCourses = List<Map<String, dynamic>>.from(data['courses'] ?? []);
           _isLoading = false;
           _hasError = false;
         });
@@ -101,27 +112,65 @@ class _MyCoursesPageState extends State<MyCoursesPage>
         throw Exception(data['message'] ?? 'Failed to load courses');
       }
     } catch (e) {
-      final message = e.toString();
-
-      if (message.contains('Missing required fields')) {
-        // Backend is saying “you have no courses” → show empty state
-        setState(() {
-          _userCourses = [];
-          _isLoading = false;
-          _hasError = false; // clear the error flag
-        });
-      } else {
-        // Any other real error → show your error state
-        setState(() {
-          _isLoading = false;
-          _hasError = true;
-          _errorMessage = message.replaceFirst('Exception: ', '');
-        });
-      }
+      print('Error fetching courses: $e');
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+        _errorMessage = e.toString().contains('Invalid user or token')
+            ? 'خطأ في تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى.'
+            : e.toString().replaceFirst('Exception: ', '');
+      });
     }
   }
 
-    @override
+  Future<List<Map<String, String>>> _fetchRelatedVideos(String courseId, String? mainVideoUrl) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+      final token = prefs.getString('token');
+
+      if (userId == null || token == null) {
+        throw Exception('User not authenticated');
+      }
+
+      print('Fetching related videos for course_id: $courseId, main_video_url: $mainVideoUrl');
+
+      final response = await http.post(
+        Uri.parse('https://eclipsekw.com/InfinityCourses/get_related_videos.php'),
+        body: {
+          'user_id': userId,
+          'token': token,
+          'course_id': courseId,
+          if (mainVideoUrl != null) 'main_video_url': mainVideoUrl,
+        },
+      ).timeout(const Duration(seconds: 30));
+
+      print('Related Videos API Status: ${response.statusCode}');
+      print('Related Videos API Body: ${response.body}');
+
+      if (response.body.isEmpty) {
+        throw Exception('Empty response from related videos API');
+      }
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200 && data['status'] == 'success') {
+        print('Related videos received: ${data['videos']}');
+        return List<Map<String, String>>.from(data['videos'].map((v) => {
+          'title': v['title'] ?? 'Untitled Video',
+          'description': v['description'] ?? 'No description',
+          'url': v['video_url'] ?? '',
+        }));
+      } else {
+        throw Exception(data['message'] ?? 'Failed to load related videos');
+      }
+    } catch (e) {
+      print('Error fetching related videos: $e');
+      return [];
+    }
+  }
+
+  @override
   void dispose() {
     _animationController.dispose();
     _refreshTimer?.cancel();
@@ -145,7 +194,6 @@ class _MyCoursesPageState extends State<MyCoursesPage>
             child: CustomScrollView(
               physics: const BouncingScrollPhysics(),
               slivers: [
-                // Header
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(
                     _sectionPadding,
@@ -174,8 +222,6 @@ class _MyCoursesPageState extends State<MyCoursesPage>
                     ),
                   ),
                 ),
-
-                // Content
                 if (_hasError)
                   SliverFillRemaining(
                     child: _buildErrorState(),
@@ -195,8 +241,7 @@ class _MyCoursesPageState extends State<MyCoursesPage>
                       itemCount: _userCourses.length,
                       separatorBuilder: (_, __) =>
                       const SizedBox(height: _itemSpacing),
-                      itemBuilder: (_, i) =>
-                          _buildCourseCard(_userCourses[i]),
+                      itemBuilder: (_, i) => _buildCourseCard(_userCourses[i]),
                     ),
                   ),
               ],
@@ -224,8 +269,46 @@ class _MyCoursesPageState extends State<MyCoursesPage>
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          // TODO: Navigate to course details
+        onTap: () async {
+          if (course['video_url'] == null || course['video_url'].isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('لا يوجد رابط فيديو لهذه الدورة',
+                    textDirection: TextDirection.rtl),
+                backgroundColor: cs.error,
+              ),
+            );
+            return;
+          }
+
+          print('Navigating to VideoPage with course_id: ${course['id']}');
+
+          final relatedVideos = await _fetchRelatedVideos(
+            course['id'].toString(),
+            course['video_url'],
+          );
+
+          if (relatedVideos.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('لا توجد فيديوهات ذات صلة متاحة لهذه الدورة',
+                    textDirection: TextDirection.rtl),
+                backgroundColor: cs.error,
+              ),
+            );
+          }
+
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => VideoPage(
+                videoUrl: course['video_url'],
+                courseName: course['title'] ?? 'بدون عنوان',
+                teacherName: course['teacher'] ?? 'غير محدد',
+                relatedVideos: relatedVideos,
+              ),
+            ),
+          );
         },
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -233,7 +316,6 @@ class _MyCoursesPageState extends State<MyCoursesPage>
             textDirection: TextDirection.rtl,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Course Image
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.network(
@@ -253,15 +335,13 @@ class _MyCoursesPageState extends State<MyCoursesPage>
                 ),
               ),
               const SizedBox(width: 16),
-
-              // Course Details
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   textDirection: TextDirection.rtl,
                   children: [
                     Text(
-                      course['major'] ?? 'غير محدد',
+                      course['major'].toString(),
                       style: tt.labelSmall?.copyWith(
                         color: cs.primary,
                       ),
@@ -276,8 +356,6 @@ class _MyCoursesPageState extends State<MyCoursesPage>
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
-
-                    // Progress Bar
                     if (progress < 1.0 && progress > 0.0)
                       Column(
                         children: [
@@ -328,10 +406,10 @@ class _MyCoursesPageState extends State<MyCoursesPage>
 
   double _calculateProgress(String? status) {
     switch (status) {
-      case 'ongoing':
+      case 'active':
         return 0.65;
-      case 'completed':
-        return 1.0;
+      case 'inactive':
+        return 0.0;
       default:
         return 0.0;
     }
@@ -339,10 +417,10 @@ class _MyCoursesPageState extends State<MyCoursesPage>
 
   String _getStatusText(String? status) {
     switch (status) {
-      case 'ongoing':
+      case 'active':
         return 'قيد التقدم';
-      case 'completed':
-        return 'مكتمل - ${DateTime.now().toString().substring(0, 10)}';
+      case 'inactive':
+        return 'لم يبدأ بعد';
       default:
         return 'لم يبدأ بعد';
     }

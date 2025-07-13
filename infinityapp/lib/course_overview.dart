@@ -494,3 +494,4 @@ class _CourseOverviewPageState extends State<CourseOverviewPage> {
     );
   }
 }
+
