@@ -61,13 +61,17 @@ class _VideoPageState extends State<VideoPage> {
       );
 
       final data = json.decode(response.body);
+      print('API Response: $data'); // Debug API response
       if (response.statusCode == 200 && data['status'] == 'success') {
         setState(() {
           _videos = List<Map<String, dynamic>>.from(data['videos']);
+          print('Video URLs: ${_videos.map((v) => v['url'])}'); // Debug URLs
           _isLoading = false;
         });
-        if (_videos.isNotEmpty) {
+        if (_videos.isNotEmpty && _videos[0].containsKey('url')) {
           _initializePlayer(_videos[0]['url']);
+        } else {
+          throw Exception('No valid video URL found');
         }
       } else {
         throw Exception(data['message'] ?? 'Failed to load videos');
@@ -82,27 +86,58 @@ class _VideoPageState extends State<VideoPage> {
   }
 
   void _initializePlayer(String url) {
+    print('Initializing Vimeo video with URL: $url');
     _chewieController?.dispose();
     _videoPlayerController?.dispose();
 
-    _videoPlayerController = VideoPlayerController.network(url)
-      ..initialize().then((_) {
-        setState(() {
-          _chewieController = ChewieController(
-            videoPlayerController: _videoPlayerController!,
-            autoPlay: true,
-            looping: false,
-            aspectRatio: _videoPlayerController!.value.aspectRatio,
-          );
-        });
+    _videoPlayerController = VideoPlayerController.network(
+      url,
+      httpHeaders: {
+        // Uncomment if Vimeo requires an access token
+        // 'Authorization': 'Bearer YOUR_VIMEO_ACCESS_TOKEN',
+      },
+      formatHint: url.endsWith('.m3u8') ? VideoFormat.hls : null, // Support HLS
+    )..initialize().then((_) {
+      setState(() {
+        _chewieController = ChewieController(
+          videoPlayerController: _videoPlayerController!,
+          autoPlay: true,
+          looping: false,
+          aspectRatio: _videoPlayerController!.value.aspectRatio != 0
+              ? _videoPlayerController!.value.aspectRatio
+              : 16 / 9,
+          errorBuilder: (context, errorMessage) {
+            return Center(
+              child: Text(
+                'Playback error: $errorMessage',
+                style: TextStyle(color: Colors.red),
+              ),
+            );
+          },
+        );
+        print('Video player initialized successfully');
       });
+    }).catchError((error) {
+      setState(() {
+        _hasError = true;
+        _errorMessage = 'Failed to initialize video: $error';
+        print('Initialization error: $error');
+      });
+    });
   }
 
   void _onVideoSelect(int index) {
     setState(() {
       _selectedIndex = index;
     });
-    _initializePlayer(_videos[index]['url']);
+    if (_videos[index].containsKey('url')) {
+      _initializePlayer(_videos[index]['url']);
+    } else {
+      setState(() {
+        _hasError = true;
+        _errorMessage = 'No valid video URL for selected video';
+      });
+    }
   }
 
   @override
@@ -126,12 +161,14 @@ class _VideoPageState extends State<VideoPage> {
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
           : _hasError
-          ? Center(child: Text(_errorMessage ?? 'خطأ في تحميل الفيديوهات'))
+          ? Center(child: Text(_errorMessage ?? 'Error loading videos'))
           : Column(
         children: [
           AspectRatio(
             aspectRatio: 16 / 9,
-            child: _chewieController != null &&
+            child: _hasError
+                ? Center(child: Text(_errorMessage ?? 'Error loading video'))
+                : _chewieController != null &&
                 _chewieController!.videoPlayerController.value.isInitialized
                 ? Chewie(controller: _chewieController!)
                 : Center(child: CircularProgressIndicator()),
@@ -146,7 +183,7 @@ class _VideoPageState extends State<VideoPage> {
                   style: tt.labelMedium?.copyWith(color: cs.primary),
                 ),
                 Text(
-                  'جميع الفيديوهات',
+                  'All Videos',
                   style: tt.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ],
@@ -165,7 +202,7 @@ class _VideoPageState extends State<VideoPage> {
                     color: isSelected ? cs.primary : cs.onSurfaceVariant,
                   ),
                   title: Text(
-                    video['title'] ?? 'بدون عنوان',
+                    video['title'] ?? 'No Title',
                     style: tt.titleMedium?.copyWith(
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                     ),
@@ -187,4 +224,3 @@ class _VideoPageState extends State<VideoPage> {
     );
   }
 }
-//tyy
