@@ -107,7 +107,12 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           await prefs.setString('created_at', responseData['user']['created_at'] ?? '');
           await prefs.setString('role', responseData['user']['role'] ?? 'student');
           await prefs.setString('token', responseData['user']['token'] ?? '');
-          await prefs.setInt('reg_courses', responseData['user']['reg_courses'] ?? 0);
+// Store reg_courses as a stringified JSON array in SharedPreferences
+          if (responseData['user']['reg_courses'] != null) {
+            await prefs.setString('reg_courses', json.encode(responseData['user']['reg_courses']));
+          } else {
+            await prefs.setString('reg_courses', '[]');
+          }
 
           Navigator.pushReplacementNamed(context, '/home');
         } else {
