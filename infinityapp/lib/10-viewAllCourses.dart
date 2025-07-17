@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'course_overview.dart';
+import '11-course_overview.dart';
 
 class ViewCoursesPage extends StatefulWidget {
   final List<Map<String, dynamic>> courses;

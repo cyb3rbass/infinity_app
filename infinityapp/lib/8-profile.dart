@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
-import 'settings.dart';
+import '14-settings.dart';
 
 
 class ProfilePage extends StatefulWidget {

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'welcomePage.dart';
-import 'startingPage.dart';
+import '2-welcomePage.dart';
+import '1-startingPage.dart';
 import 'login.dart';
-import 'register.dart';
-import 'homePage.dart';
-import 'forgetPassword.dart';
+import '5-register.dart';
+import '6-homePage.dart';
+import '4-forgetPassword.dart';
 
 
 void main() {

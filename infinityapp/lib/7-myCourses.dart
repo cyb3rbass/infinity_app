@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
 import 'package:shimmer/shimmer.dart';
-import 'video_page.dart';
+import '12-video_page.dart';
 
 class MyCoursesPage extends StatefulWidget {
   const MyCoursesPage({super.key});
