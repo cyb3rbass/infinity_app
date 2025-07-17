@@ -22,6 +22,7 @@ dependencies:
   chewie: ^1.7.1
   youtube_player_flutter: ^9.0.1
   vimeo_player_flutter: ^0.1.0
+  liquid_pull_to_refresh: ^3.0.1  # or the latest version
 
 dev_dependencies:
   flutter_test:
