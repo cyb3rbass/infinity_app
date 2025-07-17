@@ -14,8 +14,7 @@ class MyCoursesPage extends StatefulWidget {
   State<MyCoursesPage> createState() => _MyCoursesPageState();
 }
 
-class _MyCoursesPageState extends State<MyCoursesPage>
-    with SingleTickerProviderStateMixin {
+class _MyCoursesPageState extends State<MyCoursesPage> with SingleTickerProviderStateMixin {
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
   late final Animation<Offset> _slideAnimation;
@@ -28,14 +27,12 @@ class _MyCoursesPageState extends State<MyCoursesPage>
   bool _isLoading = true;
   bool _hasError = false;
   String? _errorMessage;
-  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _initAnimations();
-    _fetchUserCourses();
-    _setupAutoRefresh();
+    _fetchUserCourses(); // Auto-refresh on page entry
   }
 
   void _initAnimations() {
@@ -62,12 +59,6 @@ class _MyCoursesPageState extends State<MyCoursesPage>
     });
   }
 
-  void _setupAutoRefresh() {
-    _refreshTimer = Timer.periodic(const Duration(minutes: 5), (_) {
-      if (mounted) _fetchUserCourses();
-    });
-  }
-
   Future<void> _fetchUserCourses() async {
     try {
       setState(() => _isLoading = true);
@@ -83,9 +74,6 @@ class _MyCoursesPageState extends State<MyCoursesPage>
         throw Exception('User not authenticated or no registered courses');
       }
 
-
-      print('SharedPreferences - user_id: $userId, token: $token, reg_courses: $regCourses');
-
       final response = await http.post(
         Uri.parse('https://eclipsekw.com/InfinityCourses/get_user_courses.php'),
         body: {
@@ -94,9 +82,6 @@ class _MyCoursesPageState extends State<MyCoursesPage>
           'course_id': json.encode(regCourses),
         },
       ).timeout(const Duration(seconds: 30));
-
-      print('Courses API Status: ${response.statusCode}');
-      print('Courses API Body: ${response.body}');
 
       if (response.body.isEmpty) {
         throw Exception('Empty response from server');
@@ -114,12 +99,11 @@ class _MyCoursesPageState extends State<MyCoursesPage>
         throw Exception(data['message'] ?? 'Failed to load courses');
       }
     } catch (e) {
-      print('Error fetching courses: $e');
       setState(() {
         _isLoading = false;
         _hasError = true;
         _errorMessage = e.toString().contains('Invalid user or token')
-            ? 'خطأ في تسجيل الدخول. يرجى تسج يل الدخول مرة أخرى.'
+            ? 'خطأ في تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى.'
             : e.toString().replaceFirst('Exception: ', '');
       });
     }
@@ -128,7 +112,6 @@ class _MyCoursesPageState extends State<MyCoursesPage>
   @override
   void dispose() {
     _animationController.dispose();
-    _refreshTimer?.cancel();
     super.dispose();
   }
 
@@ -139,6 +122,25 @@ class _MyCoursesPageState extends State<MyCoursesPage>
     final screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'دوراتي',
+          style: TextStyle(
+            fontFamily: 'Tajawal',
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: _fetchUserCourses,
+            tooltip: 'تحديث',
+          ),
+        ],
+        backgroundColor: cs.surface,
+        elevation: 0,
+      ),
       body: SafeArea(
         child: _isLoading && _userCourses.isEmpty
             ? _buildShimmerLoader()
@@ -149,53 +151,19 @@ class _MyCoursesPageState extends State<MyCoursesPage>
             child: CustomScrollView(
               physics: const BouncingScrollPhysics(),
               slivers: [
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(
-                    _sectionPadding,
-                    _sectionPadding,
-                    _sectionPadding,
-                    _itemSpacing,
-                  ),
-                  sliver: SliverToBoxAdapter(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      textDirection: TextDirection.rtl,
-                      children: [
-                        Text(
-                          'دوراتي',
-                          style: tt.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Tajawal',
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.refresh_rounded),
-                          onPressed: _fetchUserCourses,
-                          tooltip: 'تحديث',
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
                 if (_hasError)
-                  SliverFillRemaining(
-                    child: _buildErrorState(),
-                  )
+                  SliverFillRemaining(child: _buildErrorState())
                 else if (_userCourses.isEmpty)
-                  SliverFillRemaining(
-                    child: _buildEmptyState(),
-                  )
+                  SliverFillRemaining(child: _buildEmptyState())
                 else
                   SliverPadding(
                     padding: EdgeInsets.symmetric(
-                      horizontal: screenWidth < 600
-                          ? _sectionPadding
-                          : _sectionPadding * 2,
+                      horizontal: screenWidth < 600 ? _sectionPadding : _sectionPadding * 2,
+                      vertical: _itemSpacing,
                     ),
                     sliver: SliverList.separated(
                       itemCount: _userCourses.length,
-                      separatorBuilder: (_, __) =>
-                      const SizedBox(height: _itemSpacing),
+                      separatorBuilder: (_, __) => const SizedBox(height: _itemSpacing),
                       itemBuilder: (_, i) => _buildCourseCard(_userCourses[i]),
                     ),
                   ),
@@ -214,13 +182,9 @@ class _MyCoursesPageState extends State<MyCoursesPage>
     final statusText = _getStatusText(course['status']);
 
     return Card(
-      elevation: 0,
+      elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: cs.outline.withOpacity(0.1),
-          width: 1,
-        ),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -228,15 +192,12 @@ class _MyCoursesPageState extends State<MyCoursesPage>
           if (course['video_url'] == null || course['video_url'].isEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('لا يوجد رابط فيديو لهذه الدورة',
-                    textDirection: TextDirection.rtl),
+                content: const Text('لا يوجد رابط فيديو لهذه الدورة', textDirection: TextDirection.rtl),
                 backgroundColor: cs.error,
               ),
             );
             return;
           }
-
-          print('Navigating to VideoPage with course_id: ${course['id']}');
 
           Navigator.push(
             context,
@@ -280,19 +241,20 @@ class _MyCoursesPageState extends State<MyCoursesPage>
                   textDirection: TextDirection.rtl,
                   children: [
                     Text(
-                      course['major'].toString(),
-                      style: tt.labelSmall?.copyWith(
-                        color: cs.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
                       course['title'] ?? 'بدون عنوان',
                       style: tt.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
+                        fontFamily: 'Tajawal',
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      course['teacher'] ?? 'غير محدد',
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurface.withOpacity(0.6),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     if (progress < 1.0 && progress > 0.0)
@@ -313,6 +275,7 @@ class _MyCoursesPageState extends State<MyCoursesPage>
                                 '${(progress * 100).toStringAsFixed(0)}%',
                                 style: tt.labelSmall?.copyWith(
                                   color: cs.primary,
+                                  fontFamily: 'Tajawal',
                                 ),
                               ),
                               const Spacer(),
@@ -320,6 +283,7 @@ class _MyCoursesPageState extends State<MyCoursesPage>
                                 statusText,
                                 style: tt.labelSmall?.copyWith(
                                   color: cs.onSurface.withOpacity(0.6),
+                                  fontFamily: 'Tajawal',
                                 ),
                               ),
                             ],
@@ -331,6 +295,7 @@ class _MyCoursesPageState extends State<MyCoursesPage>
                         statusText,
                         style: tt.labelSmall?.copyWith(
                           color: Colors.green,
+                          fontFamily: 'Tajawal',
                         ),
                       ),
                   ],
@@ -386,6 +351,7 @@ class _MyCoursesPageState extends State<MyCoursesPage>
               'لا توجد دورات مسجلة',
               style: tt.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
+                fontFamily: 'Tajawal',
               ),
             ),
             const SizedBox(height: 12),
@@ -393,6 +359,7 @@ class _MyCoursesPageState extends State<MyCoursesPage>
               'يمكنك تصفح الدورات المتاحة وتسجيل في ما يعجبك',
               style: tt.bodyMedium?.copyWith(
                 color: cs.onSurface.withOpacity(0.6),
+                fontFamily: 'Tajawal',
               ),
               textAlign: TextAlign.center,
             ),
@@ -401,7 +368,7 @@ class _MyCoursesPageState extends State<MyCoursesPage>
               onPressed: () {
                 // TODO: Navigate to courses page
               },
-              child: const Text('تصفح الدورات'),
+              child: const Text('تصفح الدورات', style: TextStyle(fontFamily: 'Tajawal')),
             ),
           ],
         ),
@@ -430,6 +397,7 @@ class _MyCoursesPageState extends State<MyCoursesPage>
               'حدث خطأ',
               style: tt.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
+                fontFamily: 'Tajawal',
               ),
             ),
             const SizedBox(height: 12),
@@ -437,13 +405,14 @@ class _MyCoursesPageState extends State<MyCoursesPage>
               _errorMessage ?? 'تعذر تحميل الدورات',
               style: tt.bodyMedium?.copyWith(
                 color: cs.onSurface.withOpacity(0.6),
+                fontFamily: 'Tajawal',
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
             FilledButton(
               onPressed: _fetchUserCourses,
-              child: const Text('إعادة المحاولة'),
+              child: const Text('إعادة المحاولة', style: TextStyle(fontFamily: 'Tajawal')),
             ),
           ],
         ),
@@ -461,29 +430,6 @@ class _MyCoursesPageState extends State<MyCoursesPage>
         padding: const EdgeInsets.all(_sectionPadding),
         child: Column(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              textDirection: TextDirection.rtl,
-              children: [
-                Container(
-                  width: 100,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
             Expanded(
               child: ListView.separated(
                 itemCount: 3,

@@ -122,7 +122,7 @@ class _CourseOverviewPageState extends State<CourseOverviewPage> {
                 TextButton(
                   onPressed: () {
                     Navigator.pop(context);
-                    Navigator.pushReplacementNamed(context, '/my_courses');
+                    Navigator.pushReplacementNamed(context, '/7-myCourses');
                   },
                   child: const Text('الذهاب إلى دوراتي'),
                 ),
