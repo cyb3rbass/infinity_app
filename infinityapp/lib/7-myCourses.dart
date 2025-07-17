@@ -75,11 +75,14 @@ class _MyCoursesPageState extends State<MyCoursesPage>
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getString('user_id');
       final token = prefs.getString('token');
-      final regCourses = prefs.getInt('reg_courses');
+      final regCoursesString = prefs.getString('reg_courses') ?? '[]';
+      final List<dynamic> regCoursesJson = json.decode(regCoursesString);
+      final List<String> regCourses = regCoursesJson.map((e) => e.toString()).toList();
 
-      if (userId == null || token == null || regCourses == null) {
+      if (userId == null || token == null || regCourses.isEmpty) {
         throw Exception('User not authenticated or no registered courses');
       }
+
 
       print('SharedPreferences - user_id: $userId, token: $token, reg_courses: $regCourses');
 
@@ -88,7 +91,7 @@ class _MyCoursesPageState extends State<MyCoursesPage>
         body: {
           'user_id': userId,
           'token': token,
-          'course_id': regCourses.toString(),
+          'course_id': json.encode(regCourses),
         },
       ).timeout(const Duration(seconds: 30));
 
